@@ -28,7 +28,8 @@ describe('analyze', () => {
 
   it('counts words per section and for the whole blog (body text only)', () => {
     const a = analyze(BLOG, opts({ includeHeadings: false, ignoreStopwords: true }));
-    expect(a.sections.map((s) => s.title)).toEqual(['Best GPS Trackers', 'Battery Life', 'Price']);
+    expect(a.sections.map((s) => s.title)).toEqual(['Introduction', 'Battery Life', 'Price']);
+    expect(a.sections[0].h1).toBe('Best GPS Trackers');
 
     expect(counts(a.sections[0].words)).toMatchObject({ gps: 2, trackers: 1, tracker: 2, useful: 1, good: 1 });
     expect(counts(a.sections[1].words)).toMatchObject({ battery: 6, life: 2, tracker: 1, matters: 1 });

@@ -1,6 +1,6 @@
 import { tokenize, normalizeKey, stripPossessive, uncountedCharacters, type Token } from './tokenize';
 import { isStopword } from './stopwords';
-import { splitSections, type HeadingMode } from './sections';
+import { sectionsFromHeadings, splitSections, type HeadingLine, type HeadingMode } from './sections';
 import { lemmaKeys, mergeIngForms, type LemmaSpan } from './lemmatizer';
 
 export type CountMode = 'exact' | 'forms';
@@ -56,6 +56,10 @@ export interface ScopeResult {
   /** Character range of this scope in the text (heading included). */
   start: number;
   end: number;
+  /** For the introduction: the H1 title. */
+  h1?: string;
+  /** Sub-headings (H3…) counted inside this section. */
+  subheadings?: string[];
   /** All words in this scope, common words and numbers included. */
   wordCount: number;
   words: Group[];
@@ -151,9 +155,21 @@ function dropContainedPhrases(phrases: Group[]): Group[] {
   );
 }
 
-export function analyze(text: string, options: AnalyzeOptions, lemmaSpans?: LemmaSpan[] | null): Analysis {
+/**
+ * @param headings Headings from the editor (exact H1-H6). Without them,
+ *   headings are found in the plain text ("#" lines or the plain-text rule).
+ */
+export function analyze(
+  text: string,
+  options: AnalyzeOptions,
+  lemmaSpans?: LemmaSpan[] | null,
+  headings?: HeadingLine[],
+): Analysis {
   const tokens = tokenize(text, { splitHyphens: options.splitHyphens });
-  const sections = splitSections(text, options.headingMode);
+  const sections =
+    headings && options.headingMode !== 'off'
+      ? sectionsFromHeadings(text, headings)
+      : splitSections(text, headings ? 'off' : options.headingMode);
   const ignore = new Set(options.ignoreWords.map(normalizeKey));
 
   // Group key for every token.
@@ -217,14 +233,17 @@ export function analyze(text: string, options: AnalyzeOptions, lemmaSpans?: Lemm
     };
   };
 
-  const inSection = (t: Token, s: (typeof sections)[number]) =>
-    (t.start >= s.bodyStart && t.start < s.bodyEnd) ||
-    (options.includeHeadings && t.start >= s.headingStart && t.start < s.headingEnd);
+  const allHeadings = sections.flatMap((s) => s.headings);
+  const inHeading = (t: Token) => allHeadings.some((h) => t.start >= h.start && t.start < h.end);
+  const counted = (t: Token) => options.includeHeadings || !inHeading(t);
+  const inSection = (t: Token, s: (typeof sections)[number]) => t.start >= s.start && t.start < s.end && counted(t);
 
-  const sectionResults = sections.map((s) =>
-    scope(s.id, s.title, s.level, [s.headingStart, s.bodyEnd], tokens.filter((t) => inSection(t, s))),
-  );
-  const wholeTokens = tokens.filter((t) => sections.some((s) => inSection(t, s)));
+  const sectionResults = sections.map((s) => ({
+    ...scope(s.id, s.title, s.level, [s.start, s.end], tokens.filter((t) => inSection(t, s))),
+    h1: s.h1,
+    subheadings: s.subheadings.map((h) => `H${h.level} ${h.title}`),
+  }));
+  const wholeTokens = tokens.filter(counted);
   const whole = scope('all', 'Whole blog', 0, [0, text.length], wholeTokens);
   const listedWords = whole.words.reduce((n, g) => n + g.count, 0);
 

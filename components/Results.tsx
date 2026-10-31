@@ -1,9 +1,9 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import type { Analysis, Group, ScopeResult } from '@/lib/analyze';
-import { normalizeKey } from '@/lib/tokenize';
 import { severity, type Settings, type Severity } from '@/lib/settings';
+import WordTable from './WordTable';
 
 export interface Selection {
   scopeId: string;
@@ -11,7 +11,7 @@ export interface Selection {
   key: string;
 }
 
-type Tab = 'sections' | 'overused' | 'all';
+type Tab = 'sections' | 'table' | 'overused';
 
 interface Props {
   analysis: Analysis;
@@ -24,7 +24,6 @@ const times = (n: number) => `used ${n} ${n === 1 ? 'time' : 'times'}`;
 
 export default function Results({ analysis, settings, selection, onSelect }: Props) {
   const [tab, setTab] = useState<Tab>('sections');
-  const [query, setQuery] = useState('');
 
   const separateCommon = settings.commonWords === 'separate';
   // Common words and numbers are counted and listed, but not flagged.
@@ -37,17 +36,6 @@ export default function Results({ analysis, settings, selection, onSelect }: Pro
   );
   overused.sort((a, b) => b.group.count - a.group.count);
   const overusedWhole = analysis.whole.words.filter((g) => !isCommon(g) && wholeSev(g) !== 'ok');
-
-  // For the All words list: how often each word is used in each section.
-  const perSection = useMemo(() => {
-    const m = new Map<string, { title: string; count: number }[]>();
-    for (const s of analysis.sections)
-      for (const g of s.words) {
-        if (!m.has(g.key)) m.set(g.key, []);
-        m.get(g.key)!.push({ title: s.title, count: g.count });
-      }
-    return m;
-  }, [analysis]);
 
   const isSelected = (scopeId: string, kind: Selection['kind'], key: string) =>
     selection?.scopeId === scopeId && selection.kind === kind && selection.key === key;
@@ -137,11 +125,6 @@ export default function Results({ analysis, settings, selection, onSelect }: Pro
     );
   };
 
-  const q = normalizeKey(query.trim());
-  const allWords = q
-    ? analysis.whole.words.filter((g) => g.key.includes(q) || g.forms.some((f) => f.form.includes(q)))
-    : analysis.whole.words;
-
   const { check } = analysis;
 
   return (
@@ -165,11 +148,11 @@ export default function Results({ analysis, settings, selection, onSelect }: Pro
         <button role="tab" type="button" aria-selected={tab === 'sections'} onClick={() => setTab('sections')}>
           By section <span className="tag">{analysis.sections.length}</span>
         </button>
+        <button role="tab" type="button" aria-selected={tab === 'table'} onClick={() => setTab('table')}>
+          Table <span className="tag">{analysis.whole.words.length}</span>
+        </button>
         <button role="tab" type="button" aria-selected={tab === 'overused'} onClick={() => setTab('overused')}>
           Overused <span className={`tag ${overused.length + overusedWhole.length ? 'tag-high' : ''}`}>{overused.length + overusedWhole.length}</span>
-        </button>
-        <button role="tab" type="button" aria-selected={tab === 'all'} onClick={() => setTab('all')}>
-          All words <span className="tag">{analysis.whole.words.length}</span>
         </button>
       </div>
 
@@ -191,6 +174,13 @@ export default function Results({ analysis, settings, selection, onSelect }: Pro
                 <span className="meta">{s.wordCount} words</span>
                 {flagged > 0 && <span className="pill">{flagged} to fix</span>}
               </header>
+              {(s.h1 || (s.subheadings && s.subheadings.length > 0)) && (
+                <p className="card-sub">
+                  {s.h1 && <>H1: {s.h1}</>}
+                  {s.h1 && s.subheadings?.length ? ' · ' : ''}
+                  {s.subheadings?.length ? <>Includes: {s.subheadings.join(' · ')}</> : null}
+                </p>
+              )}
               {scopeBody(s, sectionSev)}
             </article>
           );
@@ -223,79 +213,7 @@ export default function Results({ analysis, settings, selection, onSelect }: Pro
         </>
       )}
 
-      {tab === 'all' && (
-        <article className="card">
-          <header className="card-head">
-            <h3>Every word in the blog</h3>
-            <span className="meta">
-              {analysis.whole.words.length} different words · {check.listedWords} in total
-            </span>
-          </header>
-          <input
-            className="search"
-            type="search"
-            placeholder="Find a word…"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-          />
-          <div className="table-wrap">
-            <table className="words">
-              <thead>
-                <tr>
-                  <th>Word</th>
-                  <th className="num">Times</th>
-                  <th>Where</th>
-                </tr>
-              </thead>
-              <tbody>
-                {allWords.map((g) => (
-                  <tr
-                    key={g.key}
-                    className={`sev-${wholeSev(g)}`}
-                    aria-selected={isSelected('all', 'word', g.key)}
-                    onClick={() => onSelect({ scopeId: 'all', kind: 'word', key: g.key })}
-                  >
-                    <td>
-                      <button type="button" className="linkish">
-                        {g.display}
-                      </button>
-                      {g.forms.length > 1 && <div className="forms">{g.forms.map((f) => `${f.form} ×${f.count}`).join(' · ')}</div>}
-                    </td>
-                    <td className="num">{g.count}</td>
-                    <td className="where">
-                      {(perSection.get(g.key) ?? []).map((p) => `${p.title} ×${p.count}`).join(' · ')}
-                    </td>
-                  </tr>
-                ))}
-                {allWords.length === 0 && (
-                  <tr>
-                    <td colSpan={3} className="muted">
-                      “{query}” is not in the text.
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-              {!q && (
-                <tfoot>
-                  <tr>
-                    <td>Total</td>
-                    <td className="num">{check.listedWords}</td>
-                    <td className="muted">
-                      {check.hiddenBySettings === 0 ? `= the full word count (${check.totalWords})` : `+ ${check.hiddenBySettings} left out by settings = ${check.totalWords}`}
-                    </td>
-                  </tr>
-                </tfoot>
-              )}
-            </table>
-          </div>
-          {settings.showPhrases && analysis.whole.phrases.length > 0 && (
-            <>
-              <h4 className="minor">Repeated phrases in the whole blog</h4>
-              <ul className="rows">{analysis.whole.phrases.map((g) => row(analysis.whole, 'phrase', g, wholeSev(g)))}</ul>
-            </>
-          )}
-        </article>
-      )}
+      {tab === 'table' && <WordTable analysis={analysis} settings={settings} selection={selection} onSelect={onSelect} />}
     </div>
   );
 }

@@ -193,3 +193,73 @@ mark sup { font-size: 10px; color: var(--muted); margin-left: 1px; }
 .words tr.sev-warn .num { color: var(--warn); font-weight: 600; }
 .words tr.sev-high .num { color: var(--high); font-weight: 600; }
 .linkish { border: 0; background: none; padding: 0; font-weight: 600; cursor: pointer; text-align: left; overflow-wrap: anywhere; }
+
+/* ---------- Document editor (Google Docs-like) ---------- */
+.editor-host { display: flex; flex-direction: column; flex: 1; min-height: 0; }
+.editor-host[hidden] { display: none; }
+.editor-wrap { display: flex; flex-direction: column; flex: 1; min-height: 0; }
+.toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; padding: 6px 8px; border-bottom: 1px solid var(--border); background: var(--surface-2); border-radius: var(--radius) var(--radius) 0 0; }
+.toolbar select { border: 1px solid var(--border); background: var(--surface); border-radius: 6px; padding: 4px 6px; min-width: 150px; }
+.tb { border: 1px solid transparent; background: none; border-radius: 6px; padding: 4px 9px; cursor: pointer; font-size: 14px; }
+.tb:hover { background: var(--surface); border-color: var(--border); }
+
+.doc-scroll { flex: 1; overflow: auto; min-height: 0; }
+.doc {
+  min-height: 100%; outline: none; padding: 20px 20px 40px 56px; line-height: 1.6;
+  font-family: Arial, 'Helvetica Neue', Helvetica, sans-serif; font-size: 15px; overflow-wrap: anywhere;
+}
+.doc.is-empty::before { content: attr(data-placeholder); color: var(--muted); pointer-events: none; display: block; }
+.doc > :first-child { margin-top: 0; }
+.doc p { margin: 0 0 10px; }
+.doc h1, .doc h2, .doc h3, .doc h4, .doc h5, .doc h6 { position: relative; line-height: 1.3; font-weight: 600; }
+.doc h1 { font-size: 26px; margin: 18px 0 12px; }
+.doc h2 { font-size: 21px; margin: 22px 0 10px; }
+.doc h3 { font-size: 17px; margin: 18px 0 8px; }
+.doc h4 { font-size: 15px; margin: 16px 0 6px; }
+.doc h5 { font-size: 14px; margin: 14px 0 6px; }
+.doc h6 { font-size: 13px; margin: 14px 0 6px; color: var(--muted); }
+/* Heading level shown in the left margin */
+.doc h1::before, .doc h2::before, .doc h3::before, .doc h4::before, .doc h5::before, .doc h6::before {
+  position: absolute; left: -44px; top: 0.35em; font: 700 10px/1 system-ui, sans-serif; letter-spacing: 0.03em;
+  color: var(--accent); border: 1px solid var(--accent); border-radius: 4px; padding: 2px 4px; opacity: 0.85;
+}
+.doc h1::before { content: 'H1'; }
+.doc h2::before { content: 'H2'; }
+.doc h3::before { content: 'H3'; }
+.doc h4::before { content: 'H4'; }
+.doc h5::before { content: 'H5'; }
+.doc h6::before { content: 'H6'; }
+.doc ul, .doc ol { margin: 0 0 10px; padding-left: 24px; }
+.doc li { margin: 2px 0; }
+.doc blockquote { margin: 0 0 10px; padding-left: 12px; border-left: 3px solid var(--border); color: var(--muted); }
+.doc table { border-collapse: collapse; margin: 6px 0 14px; width: 100%; font-size: 14px; }
+.doc td, .doc th { border: 1px solid var(--border); padding: 6px 8px; vertical-align: top; text-align: left; }
+.doc th { background: var(--surface-2); font-weight: 600; }
+.doc tr:first-child td { font-weight: inherit; }
+.doc.readonly .dim { opacity: 0.4; }
+@media (max-width: 600px) { .doc { padding-left: 46px; padding-right: 12px; } }
+
+.card-sub { margin: -4px 0 8px; color: var(--muted); font-size: 13px; overflow-wrap: anywhere; }
+
+/* ---------- Word × section table ---------- */
+.table-tools { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 8px; }
+.seg.small button { padding: 3px 10px; font-size: 13px; }
+.check.small { font-size: 13px; }
+.matrix-wrap { max-height: 72vh; }
+.matrix th.sec { min-width: 92px; max-width: 160px; vertical-align: bottom; text-transform: none; letter-spacing: 0; }
+.matrix th.sec .lvl { display: block; font-size: 10px; font-weight: 700; color: var(--accent); }
+.matrix th.sec .sec-title { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; font-weight: 600; color: var(--text); font-size: 12px; text-align: right; }
+.matrix .sticky-col { position: sticky; left: 0; background: var(--surface); z-index: 1; min-width: 130px; max-width: 220px; }
+.matrix thead .sticky-col { z-index: 3; background: var(--surface-2); }
+.matrix thead th { z-index: 2; }
+.matrix tfoot .sticky-col { background: var(--surface-2); z-index: 2; }
+.matrix tbody tr { cursor: default; }
+.matrix td.total { font-weight: 700; }
+.matrix td.cell { cursor: pointer; }
+.matrix td.cell.sev-zero { color: var(--border); cursor: default; }
+.matrix td.sev-warn { background: var(--warn-bg); color: var(--warn); font-weight: 700; }
+.matrix td.sev-high { background: var(--high-bg); color: var(--high); font-weight: 700; }
+.matrix td.sev-common { color: var(--muted); }
+.matrix .check-row td { color: var(--ok); font-weight: 500; font-size: 13px; position: static; }
+/* Google Docs wraps cell and list text in <p>; keep them compact */
+.doc td p, .doc th p, .doc li p { margin: 0; }

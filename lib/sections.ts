@@ -1,5 +1,8 @@
 /**
- * Splits a blog into sections by its headings.
+ * Splits a blog into sections the way a blog is structured:
+ *  - Introduction: the H1 title and everything before the first H2.
+ *  - One section per H2. H3-H6 sub-headings stay inside their H2 section.
+ * If a text has no H2 but has H3s, H3 is used as the section level instead.
  *
  * Detection modes:
  *  - "markdown": only lines starting with # .. ###### are headings. Exact.
@@ -13,17 +16,28 @@
 
 export type HeadingMode = 'auto' | 'markdown' | 'off';
 
+export interface HeadingLine {
+  title: string;
+  level: number;
+  /** Offsets of the whole heading line. */
+  start: number;
+  end: number;
+}
+
 export interface Section {
   id: string;
   title: string;
-  /** 1-6 for headings, 0 for text before the first heading. */
+  /** Heading level that starts the section (2 for H2); 0 for the introduction. */
   level: number;
-  /** Offsets of the heading line (equal when there is no heading). */
-  headingStart: number;
-  headingEnd: number;
-  /** Offsets of the text under the heading, up to the next heading. */
-  bodyStart: number;
-  bodyEnd: number;
+  /** The H1 title, for the introduction section. */
+  h1?: string;
+  /** Character range of the section, its own heading included. */
+  start: number;
+  end: number;
+  /** Every heading line inside the section (its own heading and any sub-headings). */
+  headings: HeadingLine[];
+  /** H3-H6 headings counted inside this section. */
+  subheadings: HeadingLine[];
 }
 
 interface Line {
@@ -107,39 +121,65 @@ function findPlainHeadings(lines: Line[]): Heading[] {
   return headings;
 }
 
-export function splitSections(text: string, mode: HeadingMode = 'auto'): Section[] {
+/** Finds heading lines in plain text (markdown "#" lines, or the plain-text rule). */
+export function findHeadingLines(text: string, mode: HeadingMode = 'auto'): HeadingLine[] {
+  if (mode === 'off') return [];
   const lines = splitLines(text);
-  let headings: Heading[] = [];
-  if (mode !== 'off') {
-    headings = findMarkdownHeadings(lines);
-    if (mode === 'auto' && headings.length === 0) headings = findPlainHeadings(lines);
+  let found = findMarkdownHeadings(lines);
+  if (mode === 'auto' && found.length === 0) {
+    found = findPlainHeadings(lines);
+    // In plain text the first line is the post title (H1) when it looks like a heading.
+    const firstLine = lines.findIndex((l) => l.text.trim() !== '');
+    if (found[0]?.line === firstLine) found[0] = { ...found[0], level: 1 };
+  }
+  return found.map((h) => ({ title: h.title, level: h.level, start: lines[h.line].start, end: lines[h.line].end }));
+}
+
+/**
+ * Builds sections from known headings: Introduction (H1 + text before the
+ * first H2), then one section per H2 with its H3-H6 inside it.
+ */
+export function sectionsFromHeadings(text: string, headings: HeadingLine[]): Section[] {
+  if (headings.length === 0) {
+    return [{ id: 's0', title: 'Full text', level: 0, start: 0, end: text.length, headings: [], subheadings: [] }];
   }
 
+  // Section level: H2 normally; the highest sub-level used when there is no H2.
+  const subLevels = headings.filter((h) => h.level >= 2).map((h) => h.level);
+  const sectionLevel = subLevels.length ? Math.min(...subLevels) : 1;
+  const breaks = headings.filter((h) => h.level <= sectionLevel);
+
   const sections: Section[] = [];
-  const firstHeadingStart = headings.length ? lines[headings[0].line].start : text.length;
-  if (headings.length === 0 || text.slice(0, firstHeadingStart).trim() !== '') {
+  const add = (title: string, level: number, start: number, end: number, h1?: string) => {
+    const inside = headings.filter((h) => h.start >= start && h.start < end);
     sections.push({
-      id: 's0',
-      title: headings.length ? 'Introduction (before first heading)' : 'Full text',
-      level: 0,
-      headingStart: 0,
-      headingEnd: 0,
-      bodyStart: 0,
-      bodyEnd: firstHeadingStart,
+      id: `s${sections.length}`,
+      title,
+      level,
+      ...(h1 !== undefined && { h1 }),
+      start,
+      end,
+      headings: inside,
+      subheadings: inside.filter((h) => h.level > sectionLevel),
     });
+  };
+
+  const endOf = (k: number) => (breaks[k] ? breaks[k].start : text.length);
+  let i = 0;
+  if (breaks[0].level === 1 && sectionLevel > 1) {
+    // The H1 title and the text under it, up to the first H2.
+    add('Introduction', 0, 0, endOf(1), breaks[0].title);
+    i = 1;
+  } else if (text.slice(0, breaks[0].start).trim() !== '') {
+    add('Introduction', 0, 0, breaks[0].start);
   }
-  headings.forEach((h, k) => {
-    const line = lines[h.line];
-    const next = headings[k + 1];
-    sections.push({
-      id: `s${k + 1}`,
-      title: h.title,
-      level: h.level,
-      headingStart: line.start,
-      headingEnd: line.end,
-      bodyStart: line.end,
-      bodyEnd: next ? lines[next.line].start : text.length,
-    });
-  });
+  for (; i < breaks.length; i++) {
+    const start = sections.length === 0 ? 0 : breaks[i].start;
+    add(breaks[i].title, breaks[i].level, start, endOf(i + 1));
+  }
   return sections;
+}
+
+export function splitSections(text: string, mode: HeadingMode = 'auto'): Section[] {
+  return sectionsFromHeadings(text, findHeadingLines(text, mode));
 }
