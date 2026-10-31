@@ -166,3 +166,30 @@ mark.active { background: var(--mark-active); box-shadow: 0 0 0 2px var(--mark-a
 mark sup { font-size: 10px; color: var(--muted); margin-left: 1px; }
 
 .foot { text-align: center; color: var(--muted); font-size: 13px; margin-top: 24px; }
+
+.row.sev-common { background: var(--surface-2); border-left-color: var(--muted); }
+
+.coverage { background: var(--ok-bg); color: var(--ok); border-radius: 8px; padding: 8px 12px; font-size: 14px; margin-bottom: 10px; }
+.coverage strong { font-weight: 600; }
+.coverage.bad { background: var(--high-bg); color: var(--high); }
+
+.more { margin-top: 10px; }
+.more summary { cursor: pointer; color: var(--muted); font-size: 14px; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.chip { border: 1px solid var(--border); background: var(--surface-2); border-radius: 14px; padding: 2px 10px; font-size: 13px; cursor: pointer; }
+.chip b { font-weight: 600; color: var(--muted); }
+.chip[aria-pressed='true'] { outline: 2px solid var(--accent); }
+
+.search { width: 100%; border: 1px solid var(--border); background: var(--surface); border-radius: 8px; padding: 7px 10px; margin-bottom: 8px; }
+.table-wrap { max-height: 70vh; overflow: auto; border: 1px solid var(--border); border-radius: 8px; }
+.words { width: 100%; border-collapse: collapse; font-size: 14px; }
+.words th, .words td { text-align: left; padding: 6px 10px; border-bottom: 1px solid var(--border); vertical-align: top; }
+.words thead th { position: sticky; top: 0; background: var(--surface-2); font-size: 12px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); }
+.words tfoot td { position: sticky; bottom: 0; background: var(--surface-2); font-weight: 600; }
+.words .num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.words td.where, .words .forms { color: var(--muted); font-size: 12px; overflow-wrap: anywhere; }
+.words tbody tr { cursor: pointer; }
+.words tbody tr:hover, .words tbody tr[aria-selected='true'] { background: var(--surface-2); }
+.words tr.sev-warn .num { color: var(--warn); font-weight: 600; }
+.words tr.sev-high .num { color: var(--high); font-weight: 600; }
+.linkish { border: 0; background: none; padding: 0; font-weight: 600; cursor: pointer; text-align: left; overflow-wrap: anywhere; }

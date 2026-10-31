@@ -18,8 +18,16 @@ Battery life matters. The battery in this tracker lasts long, and battery life i
 The price is fair. Price matters less than battery life.`;
 
 describe('analyze', () => {
-  it('counts words per section and for the whole blog', () => {
+  it('counts every word by default: headings, common words and numbers included', () => {
     const a = analyze(BLOG, opts());
+    expect(a.check).toEqual({ totalWords: a.whole.wordCount, listedWords: a.whole.wordCount, hiddenBySettings: 0, unreadCharacters: [] });
+    expect(counts(a.sections[0].words)).toMatchObject({ gps: 3, trackers: 2, tracker: 2, best: 1, the: 1, a: 1 });
+    expect(counts(a.sections[1].words)).toMatchObject({ battery: 7, life: 3, the: 2, is: 1 });
+    expect(counts(a.whole.words)).toMatchObject({ battery: 8, price: 3, the: 4 });
+  });
+
+  it('counts words per section and for the whole blog (body text only)', () => {
+    const a = analyze(BLOG, opts({ includeHeadings: false, ignoreStopwords: true }));
     expect(a.sections.map((s) => s.title)).toEqual(['Best GPS Trackers', 'Battery Life', 'Price']);
 
     expect(counts(a.sections[0].words)).toMatchObject({ gps: 2, trackers: 1, tracker: 2, useful: 1, good: 1 });
@@ -28,10 +36,11 @@ describe('analyze', () => {
     expect(counts(a.whole.words)).toMatchObject({ battery: 7, tracker: 3, price: 2, life: 3, gps: 2 });
   });
 
-  it('excludes heading text by default and can include it', () => {
-    const without = analyze(BLOG, opts());
+  it('counts heading text by default and can leave it out', () => {
+    const without = analyze(BLOG, opts({ includeHeadings: false }));
     expect(counts(without.sections[1].words).battery).toBe(6);
-    const withH = analyze(BLOG, opts({ includeHeadings: true }));
+    expect(without.check.hiddenBySettings).toBe(6); // Best GPS Trackers + Battery Life + Price
+    const withH = analyze(BLOG, opts());
     expect(counts(withH.sections[1].words).battery).toBe(7);
     expect(counts(withH.whole.words).battery).toBe(8);
   });
@@ -39,7 +48,32 @@ describe('analyze', () => {
   it('counts total words including common words and numbers', () => {
     const a = analyze('The 2 cats and the dog.', opts({ headingMode: 'off' }));
     expect(a.whole.wordCount).toBe(6);
-    expect(counts(a.whole.words)).toEqual({ cats: 1, dog: 1 });
+    expect(counts(a.whole.words)).toEqual({ the: 2, '2': 1, cats: 1, and: 1, dog: 1 });
+    const b = analyze('The 2 cats and the dog.', opts({ headingMode: 'off', ignoreStopwords: true, includeNumbers: false }));
+    expect(counts(b.whole.words)).toEqual({ cats: 1, dog: 1 });
+    expect(b.check.hiddenBySettings).toBe(4);
+  });
+
+  it('marks common words so they can be listed separately', () => {
+    const a = analyze('The tracker and the map.', opts({ headingMode: 'off' }));
+    expect(a.whole.words.filter((g) => g.common).map((g) => g.key).sort()).toEqual(['and', 'the']);
+  });
+
+  it('counts possessives toward the word itself, but not contractions', () => {
+    const a = analyze("The tracker's strap. Another tracker’s case. A tracker. It's here, let's go, it is.", opts({ headingMode: 'off' }));
+    const tracker = a.whole.words.find((g) => g.key === 'tracker')!;
+    expect(tracker.count).toBe(3);
+    expect(tracker.forms).toEqual([{ form: "tracker's", count: 2 }, { form: 'tracker', count: 1 }]);
+    expect(counts(a.whole.words)).toMatchObject({ "it's": 1, "let's": 1, it: 1 });
+  });
+
+  it('counts each part of hyphenated words, or keeps them whole', () => {
+    const text = 'GPS-enabled tracker. The GPS works. GPS-enabled tracker.';
+    const split = analyze(text, opts({ headingMode: 'off' }));
+    expect(counts(split.whole.words)).toMatchObject({ gps: 3, enabled: 2, tracker: 2 });
+    expect(counts(split.whole.phrases)).toMatchObject({ 'gps enabled tracker': 2 });
+    const whole = analyze(text, opts({ headingMode: 'off', splitHyphens: false }));
+    expect(counts(whole.whole.words)).toMatchObject({ 'gps-enabled': 2, gps: 1 });
   });
 
   it('can include common words', () => {
@@ -59,6 +93,7 @@ describe('analyze', () => {
 
   it('finds repeated phrases without crossing punctuation or line breaks', () => {
     const a = analyze('best gps tracker. best gps tracker! gps tracker\nbest gps, tracker', opts({ headingMode: 'off' }));
+    expect(a.check.hiddenBySettings).toBe(0);
     expect(counts(a.whole.phrases)).toEqual({ 'best gps tracker': 2, 'gps tracker': 3, 'best gps': 3 });
   });
 
@@ -84,7 +119,7 @@ describe('analyze', () => {
   });
 
   it('section counts add up to the whole-blog count', () => {
-    const a = analyze(BLOG, opts());
+    const a = analyze(BLOG, opts({ includeHeadings: false }));
     const sum: Record<string, number> = {};
     for (const s of a.sections) for (const g of s.words) sum[g.key] = (sum[g.key] ?? 0) + g.count;
     expect(sum).toEqual(counts(a.whole.words));
@@ -92,10 +127,10 @@ describe('analyze', () => {
   });
 });
 
-// Independent reference: on letters-only text, a word is a maximal run of A-Z.
+// Independent reference: a word is a maximal run of A-Z / 0-9 (hyphens split words).
 function referenceCounts(text: string): Record<string, number> {
   const c: Record<string, number> = {};
-  for (const w of text.toLowerCase().split(/[^a-z]+/).filter(Boolean)) c[w] = (c[w] ?? 0) + 1;
+  for (const w of text.toLowerCase().split(/[^a-z0-9]+/).filter(Boolean)) c[w] = (c[w] ?? 0) + 1;
   return c;
 }
 
@@ -107,8 +142,11 @@ function rng(seed: number) {
 }
 
 describe('randomised cross-check against an independent counter', () => {
-  const vocab = ['tracker', 'GPS', 'battery', 'Hiking', 'trail', 'map', 'signal', 'device', 'safety', 'Alert', 'route', 'x'];
-  const seps = [' ', '  ', ', ', '. ', '! ', '? ', '\n', '\n\n', ' - ', ' — ', ' (', ') ', '; ', ': ', '"', '\t'];
+  const vocab = [
+    'tracker', 'GPS', 'battery', 'Hiking', 'trail', 'map', 'signal', 'device', 'safety', 'Alert', 'route', 'x',
+    'the', 'and', 'is', 'of', 'a', 'I', 'very', 'also', '2024', '10', 'GPS-enabled', 'real-time', 'e-mail',
+  ];
+  const seps = [' ', '  ', ', ', '. ', '! ', '? ', '\n', '\n\n', ' - ', ' — ', ' (', ') ', '; ', ': ', '"', '\t', '\n## ', '\n# ', ' / ', ' & ', ' $', '% '];
 
   for (let run = 0; run < 300; run++) {
     it(`run ${run}`, () => {
@@ -120,10 +158,18 @@ describe('randomised cross-check against an independent counter', () => {
         if (r() < 0.2) w = w.toUpperCase();
         text += w + seps[Math.floor(r() * seps.length)];
       }
-      const a = analyze(text, opts({ ignoreStopwords: false, headingMode: 'off' }));
       const ref = referenceCounts(text);
-      expect(counts(a.whole.words)).toEqual(ref);
-      expect(a.whole.wordCount).toBe(Object.values(ref).reduce((x, y) => x + y, 0));
+      const total = Object.values(ref).reduce((x, y) => x + y, 0);
+      // With default settings every word is counted, however sections are split.
+      for (const headingMode of ['off', 'auto', 'markdown'] as const) {
+        const a = analyze(text, opts({ headingMode }));
+        expect(counts(a.whole.words)).toEqual(ref);
+        expect(a.whole.wordCount).toBe(total);
+        expect(a.check).toEqual({ totalWords: total, listedWords: total, hiddenBySettings: 0, unreadCharacters: [] });
+        const perSection: Record<string, number> = {};
+        for (const s of a.sections) for (const g of s.words) perSection[g.key] = (perSection[g.key] ?? 0) + g.count;
+        expect(perSection).toEqual(ref);
+      }
     });
   }
 });

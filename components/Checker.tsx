@@ -3,6 +3,7 @@
 import { useDeferredValue, useEffect, useMemo, useState } from 'react';
 import { analyze, parseWordList, type Group, type ScopeResult } from '@/lib/analyze';
 import { hasHeadings, htmlToText } from '@/lib/htmlToText';
+import { tokenize } from '@/lib/tokenize';
 import { loadLemmatizer, type Lemmatizer } from '@/lib/lemmatizer';
 import { buildReport } from '@/lib/report';
 import { SAMPLE_TEXT } from '@/lib/sample';
@@ -12,7 +13,8 @@ import Results, { type Selection } from './Results';
 import SettingsPanel from './SettingsPanel';
 
 const TEXT_KEY = 'rwc:text';
-const SETTINGS_KEY = 'rwc:settings';
+// v2: every word is counted by default; older saved settings hid common words.
+const SETTINGS_KEY = 'rwc:settings:v2';
 
 type ModelState = 'idle' | 'loading' | 'ready' | 'error';
 
@@ -67,21 +69,23 @@ export default function Checker() {
     [useForms, lemmatizer, analysedText],
   );
 
-  const { mode, ignoreStopwords, includeHeadings, headingMode, ignoreWords } = settings;
+  const { mode, commonWords, includeHeadings, includeNumbers, splitHyphens, headingMode, ignoreWords } = settings;
   const analysis = useMemo(
     () =>
       analyze(
         analysedText,
         {
           mode: useForms ? 'forms' : 'exact',
-          ignoreStopwords,
+          ignoreStopwords: commonWords === 'hide',
           includeHeadings,
+          includeNumbers,
+          splitHyphens,
           headingMode,
           ignoreWords: parseWordList(ignoreWords),
         },
         lemmaSpans,
       ),
-    [analysedText, useForms, ignoreStopwords, includeHeadings, headingMode, ignoreWords, lemmaSpans],
+    [analysedText, useForms, commonWords, includeHeadings, includeNumbers, splitHyphens, headingMode, ignoreWords, lemmaSpans],
   );
 
   const selected = useMemo(() => {
@@ -102,7 +106,13 @@ export default function Checker() {
       return;
     }
     const converted = htmlToText(html);
-    if (!converted) return;
+    // Safety net: never accept a conversion that has fewer words than the
+    // plain-text copy of the same clipboard. Fall back to the plain paste.
+    const plain = e.clipboardData.getData('text/plain');
+    if (!converted || tokenize(converted).length < tokenize(plain).length) {
+      setPasteNote(null);
+      return;
+    }
     e.preventDefault();
     const ta = e.currentTarget;
     // insertText keeps the browser's undo history; fall back to a direct update.

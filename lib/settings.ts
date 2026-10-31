@@ -1,9 +1,16 @@
 import { DEFAULT_OPTIONS, type AnalyzeOptions } from './analyze';
 
-export interface Settings extends Omit<AnalyzeOptions, 'ignoreWords'> {
+/**
+ * Common words (the, and, is…):
+ *  - "separate": counted and listed in their own group, never flagged (default)
+ *  - "flag": treated like any other word
+ *  - "hide": not counted at all
+ */
+export type CommonWords = 'separate' | 'flag' | 'hide';
+
+export interface Settings extends Omit<AnalyzeOptions, 'ignoreWords' | 'ignoreStopwords'> {
+  commonWords: CommonWords;
   ignoreWords: string;
-  /** Hide words used fewer times than this. */
-  minCount: number;
   sectionWarn: number;
   sectionHigh: number;
   wholeWarn: number;
@@ -13,8 +20,8 @@ export interface Settings extends Omit<AnalyzeOptions, 'ignoreWords'> {
 
 export const DEFAULT_SETTINGS: Settings = {
   ...DEFAULT_OPTIONS,
+  commonWords: 'separate',
   ignoreWords: '',
-  minCount: 2,
   sectionWarn: 3,
   sectionHigh: 5,
   wholeWarn: 8,
@@ -22,7 +29,7 @@ export const DEFAULT_SETTINGS: Settings = {
   showPhrases: true,
 };
 
-export type Severity = 'ok' | 'warn' | 'high';
+export type Severity = 'ok' | 'warn' | 'high' | 'common';
 
 export function severity(count: number, warn: number, high: number): Severity {
   if (count >= high) return 'high';

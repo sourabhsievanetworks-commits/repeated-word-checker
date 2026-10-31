@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import type { HeadingMode } from '@/lib/sections';
-import type { Settings } from '@/lib/settings';
+import type { CommonWords, Settings } from '@/lib/settings';
 
 interface Props {
   settings: Settings;
@@ -13,7 +13,7 @@ interface Props {
 export default function SettingsPanel({ settings, onChange, modelState }: Props) {
   const [open, setOpen] = useState(false);
   const set = <K extends keyof Settings>(k: K, v: Settings[K]) => onChange({ ...settings, [k]: v });
-  const num = (k: 'minCount' | 'sectionWarn' | 'sectionHigh' | 'wholeWarn' | 'wholeHigh') => (
+  const num = (k: 'sectionWarn' | 'sectionHigh' | 'wholeWarn' | 'wholeHigh') => (
     <input
       type="number"
       min={1}
@@ -43,19 +43,31 @@ export default function SettingsPanel({ settings, onChange, modelState }: Props)
       </div>
       <p className="hint">
         {settings.mode === 'exact'
-          ? 'Counts each spelling separately: “tracker” and “trackers” are two words.'
+          ? 'Counts every word exactly as written (ignoring capital letters): “tracker” and “trackers” are counted separately.'
           : 'An English language model groups forms of the same word: tracker, trackers, tracker’s → “tracker”. Grouped spellings are listed under each word.'}
       </p>
 
       {open && (
         <div className="settings-grid">
-          <label className="check">
-            <input type="checkbox" checked={settings.ignoreStopwords} onChange={(e) => set('ignoreStopwords', e.target.checked)} />
-            Ignore common words (the, and, is, of…)
+          <label className="field">
+            Common words (the, and, is, of…)
+            <select value={settings.commonWords} onChange={(e) => set('commonWords', e.target.value as CommonWords)}>
+              <option value="separate">Count them, list them separately</option>
+              <option value="flag">Count and flag them like any word</option>
+              <option value="hide">Don’t count them</option>
+            </select>
           </label>
           <label className="check">
             <input type="checkbox" checked={settings.includeHeadings} onChange={(e) => set('includeHeadings', e.target.checked)} />
-            Count words in headings too
+            Count words in headings
+          </label>
+          <label className="check">
+            <input type="checkbox" checked={settings.splitHyphens} onChange={(e) => set('splitHyphens', e.target.checked)} />
+            Count each part of hyphenated words (GPS-enabled → GPS + enabled)
+          </label>
+          <label className="check">
+            <input type="checkbox" checked={settings.includeNumbers} onChange={(e) => set('includeNumbers', e.target.checked)} />
+            Count numbers (2024, 10…)
           </label>
           <label className="check">
             <input type="checkbox" checked={settings.showPhrases} onChange={(e) => set('showPhrases', e.target.checked)} />
@@ -73,7 +85,6 @@ export default function SettingsPanel({ settings, onChange, modelState }: Props)
             <legend>Limits</legend>
             <label>In one section: repetitive at {num('sectionWarn')} overused at {num('sectionHigh')}</label>
             <label>In the whole blog: repetitive at {num('wholeWarn')} overused at {num('wholeHigh')}</label>
-            <label>List words used at least {num('minCount')} times</label>
           </fieldset>
           <label className="field wide">
             Words to skip (brand names, your main keyword…), separated by commas

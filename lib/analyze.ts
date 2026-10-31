@@ -1,4 +1,4 @@
-import { tokenize, normalizeKey, type Token } from './tokenize';
+import { tokenize, normalizeKey, stripPossessive, uncountedCharacters, type Token } from './tokenize';
 import { isStopword } from './stopwords';
 import { splitSections, type HeadingMode } from './sections';
 import { lemmaKeys, mergeIngForms, type LemmaSpan } from './lemmatizer';
@@ -8,17 +8,24 @@ export type CountMode = 'exact' | 'forms';
 export interface AnalyzeOptions {
   /** "exact": every spelling counted separately. "forms": tracker/trackers grouped. */
   mode: CountMode;
+  /** Leave common words (the, and, is…) out completely. Off by default. */
   ignoreStopwords: boolean;
   includeHeadings: boolean;
+  includeNumbers: boolean;
+  /** Count "GPS-enabled" as "GPS" + "enabled". */
+  splitHyphens: boolean;
   headingMode: HeadingMode;
   /** Extra words to leave out, e.g. brand names. */
   ignoreWords: string[];
 }
 
+/** By default every word in the text is counted. */
 export const DEFAULT_OPTIONS: AnalyzeOptions = {
   mode: 'exact',
-  ignoreStopwords: true,
-  includeHeadings: false,
+  ignoreStopwords: false,
+  includeHeadings: true,
+  includeNumbers: true,
+  splitHyphens: true,
   headingMode: 'auto',
   ignoreWords: [],
 };
@@ -36,6 +43,10 @@ export interface Group {
   /** Spellings that were grouped together, most used first. */
   forms: { form: string; count: number }[];
   occurrences: Occurrence[];
+  /** A common word like "the" or "and": listed, but not flagged as repetition. */
+  common: boolean;
+  /** A number like "2024" or "129.99": listed, but not flagged as repetition. */
+  number: boolean;
 }
 
 export interface ScopeResult {
@@ -51,9 +62,22 @@ export interface ScopeResult {
   phrases: Group[];
 }
 
+/** Self-check that every word was read and counted. */
+export interface CoverageCheck {
+  /** Every word in the text, headings and numbers included. */
+  totalWords: number;
+  /** Words that appear in the word lists (sum of every count). */
+  listedWords: number;
+  /** Words left out on purpose by settings (common words, numbers, skip list, headings). */
+  hiddenBySettings: number;
+  /** Letters or digits the tokenizer did not read. Always empty unless there is a bug. */
+  unreadCharacters: string[];
+}
+
 export interface Analysis {
   sections: ScopeResult[];
   whole: ScopeResult;
+  check: CoverageCheck;
 }
 
 export function parseWordList(input: string): string[] {
@@ -113,6 +137,8 @@ function finish(map: Map<string, GroupBuilder>, minCount: number): Group[] {
       count: g.count,
       forms: [...g.forms].map(([form, count]) => ({ form, count })).sort((a, b) => b.count - a.count || a.form.localeCompare(b.form)),
       occurrences: g.occurrences,
+      common: isStopword(g.key) || [...g.forms.keys()].some(isStopword),
+      number: !/\p{L}/u.test(g.key),
     });
   }
   return groups.sort((a, b) => b.count - a.count || a.key.localeCompare(b.key));
@@ -126,7 +152,7 @@ function dropContainedPhrases(phrases: Group[]): Group[] {
 }
 
 export function analyze(text: string, options: AnalyzeOptions, lemmaSpans?: LemmaSpan[] | null): Analysis {
-  const tokens = tokenize(text);
+  const tokens = tokenize(text, { splitHyphens: options.splitHyphens });
   const sections = splitSections(text, options.headingMode);
   const ignore = new Set(options.ignoreWords.map(normalizeKey));
 
@@ -134,15 +160,15 @@ export function analyze(text: string, options: AnalyzeOptions, lemmaSpans?: Lemm
   const keyOf = new Map<Token, string>();
   if (options.mode === 'forms' && lemmaSpans) {
     const lemmas = lemmaKeys(tokens, lemmaSpans);
-    for (const t of tokens) keyOf.set(t, lemmas.get(t.start) ?? t.key);
+    for (const t of tokens) keyOf.set(t, lemmas.get(t.start) ?? stripPossessive(t.key));
     const ing = mergeIngForms(keyOf.values());
     for (const [t, k] of keyOf) keyOf.set(t, ing.get(k) ?? k);
   } else {
-    for (const t of tokens) keyOf.set(t, t.key);
+    for (const t of tokens) keyOf.set(t, stripPossessive(t.key));
   }
 
   const isContent = (t: Token) => {
-    if (!t.hasLetter) return false;
+    if (!t.hasLetter && !options.includeNumbers) return false;
     const k = keyOf.get(t)!;
     if (ignore.has(t.key) || ignore.has(k)) return false;
     if (options.ignoreStopwords && (isStopword(t.key) || isStopword(k))) return false;
@@ -166,7 +192,9 @@ export function analyze(text: string, options: AnalyzeOptions, lemmaSpans?: Lemm
       for (let i = 0; i + n <= scopeTokens.length; i++) {
         const win = scopeTokens.slice(i, i + n);
         if (win.slice(1).some((t) => t.breakBefore)) continue;
-        if (!isContent(win[0]) || !isContent(win[n - 1])) continue;
+        // Phrases that start or end with "the", "and"… are noise, not repetition.
+        const edge = (t: Token) => t.hasLetter && isContent(t) && !isStopword(t.key) && !isStopword(keyOf.get(t)!);
+        if (!edge(win[0]) || !edge(win[n - 1])) continue;
         addTo(
           phrases,
           win.map((t) => keyOf.get(t)).join(' '),
@@ -197,9 +225,17 @@ export function analyze(text: string, options: AnalyzeOptions, lemmaSpans?: Lemm
     scope(s.id, s.title, s.level, [s.headingStart, s.bodyEnd], tokens.filter((t) => inSection(t, s))),
   );
   const wholeTokens = tokens.filter((t) => sections.some((s) => inSection(t, s)));
+  const whole = scope('all', 'Whole blog', 0, [0, text.length], wholeTokens);
+  const listedWords = whole.words.reduce((n, g) => n + g.count, 0);
 
   return {
     sections: sectionResults,
-    whole: scope('all', 'Whole blog', 0, [0, text.length], wholeTokens),
+    whole,
+    check: {
+      totalWords: tokens.length,
+      listedWords,
+      hiddenBySettings: tokens.length - listedWords,
+      unreadCharacters: uncountedCharacters(text, tokens),
+    },
   };
 }

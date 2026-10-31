@@ -76,6 +76,8 @@ function looksLikeParagraph(s: string): boolean {
   return /[.!?:;"\u201D')\]]$/.test(t) || wordCount(t) >= 15;
 }
 
+const BULLET_RE = /^\s*[-*\u2022\u2013\u25AA\u25CF]\s/;
+
 function looksLikeHeadingLine(s: string): boolean {
   const t = s.trim();
   if (!t || t.length > 100) return false;
@@ -97,7 +99,8 @@ function findPlainHeadings(lines: Line[]): Heading[] {
     if (!next || !looksLikeParagraph(next.text)) return;
     const prev = nonEmpty[k - 1];
     // A short un-punctuated line after another one is a list, not a heading.
-    if (prev && !looksLikeParagraph(prev.text)) return;
+    // A bulleted item before it is fine: the list has ended.
+    if (prev && !looksLikeParagraph(prev.text) && !BULLET_RE.test(prev.text)) return;
     if (prev && /:\s*$/.test(prev.text)) return;
     headings.push({ line: cur.i, level: 2, title: cur.text.trim() });
   });

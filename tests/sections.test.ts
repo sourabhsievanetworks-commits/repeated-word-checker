@@ -44,6 +44,18 @@ describe('splitSections', () => {
     expect(titles(text)).toEqual(['Best GPS Trackers for Hiking', 'What Is a GPS Tracker?', 'Battery Life']);
   });
 
+  it('detects a heading right after a bulleted list', () => {
+    const text = [
+      '1. Jiobit Smart Tag – Best Overall',
+      'The Jiobit is tiny and lasts up to 7 days.',
+      '• Real-time location',
+      '• Price: $129.99 + $8.99/month',
+      '2. AngelSense – Best for Special Needs',
+      'AngelSense is built for kids with autism.',
+    ].join('\n');
+    expect(titles(text)).toEqual(['1. Jiobit Smart Tag – Best Overall', '2. AngelSense – Best for Special Needs']);
+  });
+
   it('does not treat list items as headings', () => {
     const text = [
       'Key features to look for:',

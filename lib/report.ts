@@ -3,22 +3,22 @@ import type { Settings } from './settings';
 
 const times = (n: number) => `used ${n} ${n === 1 ? 'time' : 'times'}`;
 
-function lines(groups: Group[], min: number): string[] {
-  return groups.filter((g) => g.count >= min).map((g) => `  ${g.display} — ${times(g.count)}`);
+function lines(groups: Group[]): string[] {
+  return groups.map((g) => `  ${g.display} — ${times(g.count)}`);
 }
 
 function scopeReport(s: ScopeResult, settings: Settings): string {
   const out = [`${s.title} (${s.wordCount} words)`];
-  const w = lines(s.words, settings.minCount);
-  out.push(...(w.length ? w : ['  No repeated words']));
-  if (settings.showPhrases && s.phrases.length) out.push('  Phrases:', ...lines(s.phrases, 2).map((l) => '  ' + l));
+  out.push(...(s.words.length ? lines(s.words) : ['  No words']));
+  if (settings.showPhrases && s.phrases.length) out.push('  Repeated phrases:', ...lines(s.phrases).map((l) => '  ' + l));
   return out.join('\n');
 }
 
-/** Plain-text report for copying into a doc or chat. */
+/** Plain-text report of every word, for copying into a doc or chat. */
 export function buildReport(a: Analysis, settings: Settings): string {
   return [
     'REPEATED WORDS REPORT',
+    `${a.check.totalWords} words read, ${a.check.listedWords} counted below, ${a.check.hiddenBySettings} left out by settings.`,
     '',
     scopeReport(a.whole, settings),
     '',
