@@ -13,7 +13,7 @@ interface Props {
 export default function SettingsPanel({ settings, onChange, modelState }: Props) {
   const [open, setOpen] = useState(false);
   const set = <K extends keyof Settings>(k: K, v: Settings[K]) => onChange({ ...settings, [k]: v });
-  const num = (k: 'sectionWarn' | 'sectionHigh' | 'wholeWarn' | 'wholeHigh') => (
+  const num = (k: 'sectionWarn' | 'sectionHigh' | 'wholeWarn' | 'wholeHigh' | 'closeWindow') => (
     <input
       type="number"
       min={1}
@@ -30,11 +30,11 @@ export default function SettingsPanel({ settings, onChange, modelState }: Props)
     <div className="settings">
       <div className="settings-main">
         <div className="seg" role="radiogroup" aria-label="How to count">
-          <button type="button" role="radio" aria-checked={settings.mode === 'exact'} onClick={() => set('mode', 'exact')}>
-            Exact words
-          </button>
           <button type="button" role="radio" aria-checked={settings.mode === 'forms'} onClick={() => set('mode', 'forms')}>
             Word forms (AI){settings.mode === 'forms' && modelState === 'loading' ? '…' : ''}
+          </button>
+          <button type="button" role="radio" aria-checked={settings.mode === 'exact'} onClick={() => set('mode', 'exact')}>
+            Exact spelling
           </button>
         </div>
         <button type="button" className="btn ghost sm" aria-expanded={open} onClick={() => setOpen(!open)}>
@@ -43,8 +43,8 @@ export default function SettingsPanel({ settings, onChange, modelState }: Props)
       </div>
       <p className="hint">
         {settings.mode === 'exact'
-          ? 'Counts every word exactly as written (ignoring capital letters): “tracker” and “trackers” are counted separately.'
-          : 'An English language model groups forms of the same word: tracker, trackers, tracker’s → “tracker”. Grouped spellings are listed under each word.'}
+          ? 'Counts every spelling on its own (ignoring capital letters): “tracker” and “trackers” are separate rows.'
+          : 'A language model reads each word in its sentence and counts forms of the same word together: track, tracks, tracked, tracking → “track”. The spellings it grouped are listed under each word.'}
       </p>
 
       {open && (
@@ -85,6 +85,7 @@ export default function SettingsPanel({ settings, onChange, modelState }: Props)
             <legend>Limits</legend>
             <label>In one section: repetitive at {num('sectionWarn')} overused at {num('sectionHigh')}</label>
             <label>In the whole blog: repetitive at {num('wholeWarn')} overused at {num('wholeHigh')}</label>
+            <label>Close together: the same word again within {num('closeWindow')} words</label>
           </fieldset>
           <label className="field wide">
             Words to skip (brand names, your main keyword…), separated by commas

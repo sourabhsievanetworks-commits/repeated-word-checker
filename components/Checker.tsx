@@ -17,8 +17,8 @@ import SettingsPanel from './SettingsPanel';
 const HTML_KEY = 'rwc:html';
 /** Plain text saved by the first version of the app; converted on load. */
 const OLD_TEXT_KEY = 'rwc:text';
-// v2: every word is counted by default; older saved settings hid common words.
-const SETTINGS_KEY = 'rwc:settings:v2';
+// v3: word forms are grouped by default; older saved settings counted exact spellings.
+const SETTINGS_KEY = 'rwc:settings:v3';
 
 const EMPTY_MODEL: DocModel = { text: '', blocks: [], headings: [], tableCount: 0 };
 
@@ -93,7 +93,7 @@ export default function Checker() {
     [useForms, lemmatizer, analysed],
   );
 
-  const { mode, commonWords, includeHeadings, includeNumbers, splitHyphens, headingMode, ignoreWords } = settings;
+  const { mode, commonWords, includeHeadings, includeNumbers, splitHyphens, headingMode, ignoreWords, closeWindow } = settings;
   const analysis = useMemo(
     () =>
       analyze(
@@ -106,11 +106,12 @@ export default function Checker() {
           splitHyphens,
           headingMode,
           ignoreWords: parseWordList(ignoreWords),
+          closeWindow,
         },
         lemmaSpans,
         analysed.headings,
       ),
-    [analysed, useForms, commonWords, includeHeadings, includeNumbers, splitHyphens, headingMode, ignoreWords, lemmaSpans],
+    [analysed, useForms, commonWords, includeHeadings, includeNumbers, splitHyphens, headingMode, ignoreWords, closeWindow, lemmaSpans],
   );
 
   const selected = useMemo(() => {
@@ -121,6 +122,9 @@ export default function Checker() {
     const group: Group | undefined = list?.find((g) => g.key === selection.key);
     return scope && group ? { scope, group } : null;
   }, [selection, analysis]);
+
+  // How often each word is already used, so suggested alternatives can say so.
+  const usage = useMemo(() => new Map(analysis.whole.words.map((g) => [g.key, g.count])), [analysis]);
 
   const levelCounts = [1, 2, 3, 4, 5, 6]
     .map((l) => [l, doc.headings.filter((h) => h.level === l).length] as const)
@@ -182,6 +186,7 @@ export default function Checker() {
               group={selected.group}
               scope={selected.scope}
               kind={selection!.kind}
+              usage={usage}
               onClose={() => setSelection(null)}
             />
           )}

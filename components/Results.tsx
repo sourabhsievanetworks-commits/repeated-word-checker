@@ -36,6 +36,10 @@ export default function Results({ analysis, settings, selection, onSelect }: Pro
   );
   overused.sort((a, b) => b.group.count - a.group.count);
   const overusedWhole = analysis.whole.words.filter((g) => !isCommon(g) && wholeSev(g) !== 'ok');
+  const closeRepeats = analysis.sections.flatMap((s) =>
+    s.words.filter((g) => g.close > 0 && !g.common && !g.number).map((g) => ({ scope: s, group: g })),
+  );
+  closeRepeats.sort((a, b) => b.group.close - a.group.close || b.group.count - a.group.count);
 
   const isSelected = (scopeId: string, kind: Selection['kind'], key: string) =>
     selection?.scopeId === scopeId && selection.kind === kind && selection.key === key;
@@ -53,6 +57,11 @@ export default function Results({ analysis, settings, selection, onSelect }: Pro
         <span className="count">{times(g.count)}</span>
         {kind === 'word' && scope.wordCount > 0 && (
           <span className="density">{((g.count / scope.wordCount) * 100).toFixed(1)}%</span>
+        )}
+        {kind === 'word' && g.close > 0 && sev !== 'common' && (
+          <span className="close-badge" title="Used again within a few words of the previous use">
+            {g.close} close together
+          </span>
         )}
         {where && <span className="where">in {where}</span>}
         {g.forms.length > 1 && (
@@ -152,7 +161,7 @@ export default function Results({ analysis, settings, selection, onSelect }: Pro
           Table <span className="tag">{analysis.whole.words.length}</span>
         </button>
         <button role="tab" type="button" aria-selected={tab === 'overused'} onClick={() => setTab('overused')}>
-          Overused <span className={`tag ${overused.length + overusedWhole.length ? 'tag-high' : ''}`}>{overused.length + overusedWhole.length}</span>
+          Overused <span className={`tag ${overused.length + overusedWhole.length ? 'tag-high' : ''}`}>{overused.length + overusedWhole.length + closeRepeats.length}</span>
         </button>
       </div>
 
@@ -197,6 +206,17 @@ export default function Results({ analysis, settings, selection, onSelect }: Pro
               <ul className="rows">{overused.map(({ scope, group }) => row(scope, 'word', group, sectionSev(group), scope.title))}</ul>
             ) : (
               <p className="muted small">No word is used {settings.sectionWarn} or more times in any one section.</p>
+            )}
+          </article>
+          <article className="card">
+            <header className="card-head">
+              <h3>Close together</h3>
+              <span className="meta">same word again within {settings.closeWindow} words</span>
+            </header>
+            {closeRepeats.length ? (
+              <ul className="rows">{closeRepeats.map(({ scope, group }) => row(scope, 'word', group, sectionSev(group), scope.title))}</ul>
+            ) : (
+              <p className="muted small">No word is repeated within {settings.closeWindow} words of itself.</p>
             )}
           </article>
           <article className="card">

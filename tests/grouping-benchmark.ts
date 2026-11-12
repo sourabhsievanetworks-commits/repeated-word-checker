@@ -1,0 +1,152 @@
+/**
+ * Benchmark for word-form grouping: realistic blog sentences with the
+ * groupings a careful editor would expect.
+ *  - same: these spellings are forms of one word and must share a group.
+ *  - apart: these are different words and must never share a group.
+ */
+export interface BenchmarkCase {
+  text: string;
+  same?: string[][];
+  apart?: string[][];
+}
+
+export const BENCHMARK: BenchmarkCase[] = [
+  // Plurals and possessives
+  { text: 'Trackers help parents. The tracker works well. A tracker’s battery lasts. Many trackers fail.', same: [['trackers', 'tracker', "tracker's"]] },
+  { text: 'Batteries die fast. The battery in this device is small. Battery life matters.', same: [['batteries', 'battery']] },
+  { text: 'Devices vary in price. This device costs less. Each device has prices listed.', same: [['devices', 'device'], ['prices', 'price']] },
+  { text: 'Children love it. Each child wears one. The child’s watch is light.', same: [['children', 'child', "child's"]] },
+  { text: 'Companies sell them. One company leads. The company’s plan is cheap.', same: [['companies', 'company', "company's"]] },
+  { text: 'Features matter. One feature stands out. Key Features include GPS.', same: [['features', 'feature']] },
+  { text: 'Watches for kids are popular. A watch can call home. This watch is new.', same: [['watches', 'watch']] },
+  { text: 'Boxes arrived today. The box was small. Open the box carefully.', same: [['boxes', 'box']] },
+  { text: 'Knives are sharp. A knife cuts well. Keep the knife dry.', same: [['knives', 'knife']] },
+  { text: 'Women and men use it. A woman tested it. One man returned it.', same: [['women', 'woman'], ['men', 'man']] },
+  { text: 'Studies show results. One study found more. The study was large.', same: [['studies', 'study']] },
+  { text: 'Fees add up. The monthly fee is low. Check every fee.', same: [['fees', 'fee']] },
+
+  // Verb forms
+  { text: 'We tested twelve models. Each test took a week. Testing was slow. We test daily and it tests well.', same: [['tested', 'test', 'testing', 'tests']] },
+  { text: 'It tracks location. We tracked ten kids. Tracking is easy. You can track anyone.', same: [['tracks', 'tracked', 'tracking', 'track']] },
+  { text: 'They use it daily. Parents used it. Using the app is simple. It uses GPS.', same: [['use', 'used', 'using', 'uses']] },
+  { text: 'He ran home. She runs fast. They run daily. Running helps.', same: [['ran', 'runs', 'run', 'running']] },
+  { text: 'We chose the best. You choose a plan. Choosing takes time. The chosen plan works.', same: [['chose', 'choose', 'choosing', 'chosen']] },
+  { text: 'It makes calls. We made a list. Making calls is free. You can make one.', same: [['makes', 'made', 'making', 'make']] },
+  { text: 'Prices dropped. They drop often. Dropping it breaks it. One drop is fine.', same: [['dropped', 'drop', 'dropping']] },
+  { text: 'We compared plans. Compare them yourself. Comparing helps. It compares well.', same: [['compared', 'compare', 'comparing', 'compares']] },
+  { text: 'The app updates often. An update arrived. We updated it. Updating is quick.', same: [['updates', 'update', 'updated', 'updating']] },
+  { text: 'It charges fast. Charge it nightly. We charged it. Charging takes an hour.', same: [['charges', 'charge', 'charged', 'charging']] },
+  { text: 'They found a signal. You find it fast. Finding it is easy.', same: [['found', 'find', 'finding']] },
+  { text: 'We wrote reviews. They write often. Writing helps. A written guide exists.', same: [['wrote', 'write', 'writing', 'written']] },
+  { text: 'It kept working. Keep it dry. Keeping it charged helps.', same: [['kept', 'keep', 'keeping']] },
+  { text: 'She bought two. They buy online. Buying is simple.', same: [['bought', 'buy', 'buying']] },
+
+  // -ing and -ed forms used as nouns and adjectives
+  { text: 'Tracking Devices for Kids. GPS tracking is accurate. We track every device.', same: [['tracking', 'track']] },
+  { text: 'Hiking is fun. We hike often. A hiking trail is near.', same: [['hiking', 'hike']] },
+  { text: 'The pricing is fair. They price it low. Pricing changes yearly.', apart: [['pricing', 'prize']] },
+  { text: 'A trusted brand. Parents trust it. Trusted by millions.', same: [['trusted', 'trust']] },
+  { text: 'An updated design. They update yearly. The updated app is fast.', same: [['updated', 'update']] },
+  { text: 'A connected device. Connect it to Wi-Fi. Stay connected all day.', same: [['connected', 'connect']] },
+  { text: 'The building is tall. They build quickly. Building takes years.', same: [['building', 'build']] },
+  { text: 'Shipping is free. They ship fast. Shipping takes two days.', same: [['shipping', 'ship']] },
+  { text: 'Swimming is safe. Kids swim daily. A swimming pool is near.', same: [['swimming', 'swim']] },
+
+  // Comparatives
+  { text: 'A bigger screen. The big model. The biggest battery.', same: [['bigger', 'big', 'biggest']] },
+  { text: 'A cheaper plan. The cheap one. The cheapest option.', same: [['cheaper', 'cheap', 'cheapest']] },
+  { text: 'A longer battery. A long strap. The longest range.', same: [['longer', 'long', 'longest']] },
+  { text: 'An easier setup. An easy app. The easiest choice.', same: [['easier', 'easy', 'easiest']] },
+
+  // Capitals in headings and sentence starts
+  { text: 'Best Trackers For Hiking Trails\nTrackers guide hikers. The trail was long. Trails vary.', same: [['trackers'], ['trails', 'trail']] },
+  { text: 'Batteries Matter\nBatteries last a week. One battery died.', same: [['batteries', 'battery']] },
+
+  // The same spelling must always land in one group
+  { text: 'Tracking is useful. We are tracking it. A tracking device. Tracking helps. They keep tracking.', same: [['tracking']] },
+  { text: 'The update is here. Update it now. An update helps. We update often.', same: [['update']] },
+  { text: 'Use the cover. It covers the screen. A cover helps. Cover it well.', same: [['cover', 'covers']] },
+  { text: 'A work phone. They work late. Work is hard. It works. Work smart.', same: [['work', 'works']] },
+  { text: 'Left the house. The left side. Turn left. He left early.', same: [['left']] },
+
+  // Different words that must stay apart
+  { text: 'The best choice is good. A better plan is good too.', apart: [['best', 'good'], ['better', 'good']] },
+  { text: 'We went home. They go daily. Going is fun.', apart: [['went', 'go']], same: [['go', 'going']] },
+  { text: 'In the evening it was even colder. An even number. Every evening we walk.', apart: [['evening', 'even']] },
+  { text: 'Each morning we mourn. The morning was cold.', apart: [['morning', 'mourn']] },
+  { text: 'A feed of news. The fee is low. Feed the dog. One fee applies.', apart: [['feed', 'fee']] },
+  { text: 'Plant a seed. I see it. Seed it well. You see more.', apart: [['seed', 'see']] },
+  { text: 'We need speed. The need is real. Speed matters.', apart: [['need', 'speed']] },
+  { text: 'One thing is clear. Things change. The thin strap. A thing to note.', apart: [['thing', 'thin']], same: [['thing', 'things']] },
+  { text: 'A new phone. The news today. New features. Good news.', apart: [['new', 'news']] },
+  { text: 'The offer ends. Turn it off. An offer for you. Off the grid.', apart: [['offer', 'off']] },
+  { text: 'A letter came. Let them go. The letter was long. Let me see.', apart: [['letter', 'let']] },
+  { text: 'A number of users. My hand is numb. The number grew. Numb fingers.', apart: [['number', 'numb']] },
+  { text: 'The user logs in. Use the app. A user account. Use it daily.', apart: [['user', 'use']] },
+  { text: 'A tracker tracks kids. The tracker is small. Track them.', apart: [['tracker', 'track']], same: [['tracks', 'track']] },
+  { text: 'The hiker likes to hike. Hikers hike often.', apart: [['hiker', 'hike']], same: [['hiker', 'hikers']] },
+  { text: 'This is his. It is. This works. His phone.', apart: [['this', 'his'], ['is', 'his']] },
+  { text: 'A bus stop. But the bus was late. Buses run. But wait.', apart: [['bus', 'but']], same: [['bus', 'buses']] },
+  { text: 'During the day the cure works. During setup, cure times vary.', apart: [['during', 'cure']] },
+  { text: 'The ring is gold. They rang twice. Ring the bell.', same: [['ring', 'rang']] },
+  { text: 'A business plan. Busy days. The business grew. Stay busy.', apart: [['business', 'busy']] },
+  { text: 'The data is safe. A date was set. Data plans. The date passed.', apart: [['data', 'date']] },
+  { text: 'A pass is needed. The past is gone. Pass it on. Past events.', apart: [['pass', 'past']] },
+  { text: 'It lives on. Their lives changed. A long life. Life is short. He lives here.', same: [['life']] },
+  { text: 'A wicked wick burned. The wick was short. Wicked fast.', apart: [['wicked', 'wick']] },
+  { text: 'The earring fell near my ear. An ear hurts. The earring is gold.', apart: [['earring', 'ear']] },
+];
+
+/** Held-out cases, written after the grouping rules were fixed, to check they generalise. */
+export const HELD_OUT: BenchmarkCase[] = [
+  { text: 'Subscriptions cost more. A subscription renews. Each subscription’s price rises.', same: [['subscriptions', 'subscription', "subscription's"]] },
+  { text: 'Parents worry. A parent called. The parent’s phone rang. Parents agree.', same: [['parents', 'parent', "parent's"]] },
+  { text: 'Cities grow. This city is big. The city’s roads are wide.', same: [['cities', 'city', "city's"]] },
+  { text: 'Phones break. A phone rings. Phone cases help. Two phones.', same: [['phones', 'phone']] },
+  { text: 'We recommend it. Experts recommended two. Recommending one is hard. She recommends this.', same: [['recommend', 'recommended', 'recommending', 'recommends']] },
+  { text: 'It sends alerts. We sent a text. Sending is free. Send one now.', same: [['sends', 'sent', 'sending', 'send']] },
+  { text: 'They offer plans. It offered more. Offering discounts helps. One offers less.', same: [['offer', 'offered', 'offering', 'offers']] },
+  { text: 'We planned a trip. Plan ahead. Planning helps. The plans changed.', same: [['planned', 'plan', 'planning', 'plans']] },
+  { text: 'It stopped working. Stop the alarm. Stopping is easy. It stops alone.', same: [['stopped', 'stop', 'stopping', 'stops']] },
+  { text: 'She carried it. Carry the bag. Carrying it is hard. He carries two.', same: [['carried', 'carry', 'carrying', 'carries']] },
+  { text: 'They paid monthly. Pay the bill. Paying late costs more.', same: [['paid', 'pay', 'paying']] },
+  { text: 'It grew fast. Markets grow. Growing demand helps. A grown child.', same: [['grew', 'grow', 'growing', 'grown']] },
+  { text: 'A broken strap. It breaks easily. They break often. The broken clip.', same: [['broken', 'breaks', 'break']] },
+  { text: 'A hidden fee. They hide costs. Hidden charges add up.', same: [['hidden', 'hide']] },
+  { text: 'A recommended model. We recommend it. The recommended plan.', same: [['recommended', 'recommend']] },
+  { text: 'An improved sensor. They improve yearly. The improved range helps.', same: [['improved', 'improve']] },
+  { text: 'A limited range. Limits apply. They limit use. The limited plan.', same: [['limited', 'limit', 'limits']] },
+  { text: 'Monitoring matters. We monitor kids. Remote monitoring works.', same: [['monitoring', 'monitor']] },
+  { text: 'Parenting is hard. Parents know. Good parenting helps.', apart: [['parenting', 'parents']] },
+  { text: 'Cycling is healthy. They cycle daily. A cycling route.', same: [['cycling', 'cycle']] },
+  { text: 'Mapping is exact. Maps help. They map trails. Live mapping.', same: [['mapping', 'map', 'maps']] },
+  { text: 'A smaller watch. The small strap. The smallest model.', same: [['smaller', 'small', 'smallest']] },
+  { text: 'A faster chip. A fast charge. The fastest network.', same: [['faster', 'fast', 'fastest']] },
+  { text: 'A safer choice. A safe zone. The safest option.', same: [['safer', 'safe', 'safest']] },
+  { text: 'A heavier case. A heavy strap. The heaviest model.', same: [['heavier', 'heavy', 'heaviest']] },
+  { text: 'Top Rated Watches For Children\nWatches differ. A watch helps. Children like them. A child wears it.', same: [['watches', 'watch'], ['children', 'child']] },
+  { text: 'Setting Up Alerts\nAlerts arrive fast. An alert shows. Set alerts early.', same: [['alerts', 'alert']] },
+  { text: 'Waterproof ratings vary. The rating is high. A rating of IP68. Ratings help.', same: [['ratings', 'rating']] },
+  { text: 'The signal drops. A strong signal. Signals vary. It signals danger.', same: [['signal', 'signals']] },
+  { text: 'Set a limit. It limits calls. A limit applies. Limit screen time.', same: [['limit', 'limits']] },
+  { text: 'A paper guide. He is a pap fan. The paper tore.', apart: [['paper', 'pap']] },
+  { text: 'A corner shop sells corn. The corner is busy. Corn is cheap.', apart: [['corner', 'corn']] },
+  { text: 'The matter is closed. A mat lies there. It does not matter. The mat is red.', apart: [['matter', 'mat']] },
+  { text: 'A winter coat. They win often. Winter is cold. We win.', apart: [['winter', 'win']] },
+  { text: 'A sitting room. Sit down. The sitter left. Sitting is bad.', same: [['sitting', 'sit']], apart: [['sitter', 'sit']] },
+  { text: 'It is worth it. The worst plan. Worth the price. The worst part.', apart: [['worth', 'worst']] },
+  { text: 'The latest model. It came late. The latest update. Late fees apply.', same: [['latest', 'late']] },
+  { text: 'A bed was red. The bed is soft. Red straps. One bed.', apart: [['bed', 'red']] },
+  { text: 'The app is apt. An app store. Apt names. The app works.', apart: [['app', 'apt']] },
+  { text: 'A message arrived. It massaged the data. Messages come. The message is short.', apart: [['message', 'massaged']], same: [['message', 'messages']] },
+  { text: 'Something changed. Some things stay. Something new. Some users left.', apart: [['something', 'some']] },
+  { text: 'A weeding tool. Our wedding day. Weeding takes time. The wedding was big.', apart: [['weeding', 'wedding']] },
+  { text: 'The staff is kind. A kind of watch. Kinds vary. This kind helps.', same: [['kind', 'kinds']] },
+  { text: 'Does it work? It does. A doe ran. Does it call?', apart: [['does', 'doe']] },
+  { text: 'A string of beads. It stings. The string broke. A sting hurts.', apart: [['string', 'sting']] },
+  { text: 'It lasted a week. The last one. Lasting power matters. It lasts.', same: [['lasted', 'lasting', 'lasts']] },
+  { text: 'We added maps. Add a contact. Adding one is easy. It adds value.', same: [['added', 'add', 'adding', 'adds']] },
+  { text: 'It died fast. Batteries die. A dying battery. It dies soon.', same: [['died', 'die', 'dies']] },
+  { text: 'A wired headset. A wire broke. Wired earbuds. The wire is thin.', same: [['wired', 'wire']] },
+  { text: 'A used phone. They use apps. Used devices sell. We use it.', same: [['used', 'use']] },
+];

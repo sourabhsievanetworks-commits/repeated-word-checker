@@ -263,3 +263,10 @@ mark sup { font-size: 10px; color: var(--muted); margin-left: 1px; }
 .matrix .check-row td { color: var(--ok); font-weight: 500; font-size: 13px; position: static; }
 /* Google Docs wraps cell and list text in <p>; keep them compact */
 .doc td p, .doc th p, .doc li p { margin: 0; }
+
+/* ---------- Close repeats and alternatives ---------- */
+.close-badge { font-size: 12px; font-weight: 600; color: var(--high); border: 1px solid currentColor; border-radius: 10px; padding: 0 7px; }
+.hl-extra { padding: 8px 14px; border-bottom: 1px solid var(--border); background: var(--surface-2); font-size: 14px; }
+.hl-extra p { margin: 2px 0; }
+mark.close { text-decoration: underline wavy var(--high); text-decoration-thickness: 1.5px; text-underline-offset: 3px; }
+.close-key { display: inline-block; width: 18px; height: 0; border-bottom: 2px dotted var(--high); vertical-align: middle; margin-right: 2px; }

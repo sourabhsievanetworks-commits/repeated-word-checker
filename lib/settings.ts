@@ -20,6 +20,8 @@ export interface Settings extends Omit<AnalyzeOptions, 'ignoreWords' | 'ignoreSt
 
 export const DEFAULT_SETTINGS: Settings = {
   ...DEFAULT_OPTIONS,
+  // Forms of a word (tracker, trackers, tracker's) are counted together by default.
+  mode: 'forms',
   commonWords: 'separate',
   ignoreWords: '',
   sectionWarn: 3,
