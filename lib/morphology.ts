@@ -16,6 +16,7 @@ interface RawMorphology {
   n: string;
   v: string;
   a: string;
+  r?: string;
   nf: string;
   vf: string;
   af: string;
@@ -25,10 +26,11 @@ interface RawMorphology {
 }
 
 export interface Morphology {
-  /** Words that exist as a noun, verb, adjective. */
+  /** Words that exist as a noun, verb, adjective, adverb. */
   n: ReadonlySet<string>;
   v: ReadonlySet<string>;
   a: ReadonlySet<string>;
+  r: ReadonlySet<string>;
   /** How often a word is used in each role in WordNet's tagged text. */
   nf: ReadonlyMap<string, number>;
   vf: ReadonlyMap<string, number>;
@@ -48,6 +50,7 @@ export function parseMorphology(raw: RawMorphology): Morphology {
     n: words(raw.n),
     v: words(raw.v),
     a: words(raw.a),
+    r: words(raw.r ?? ''),
     nf: withCounts(raw.nf),
     vf: withCounts(raw.vf),
     af: withCounts(raw.af),
@@ -70,6 +73,17 @@ export function loadMorphology(): Promise<Morphology> {
 }
 
 export type Kind = 'noun' | 'verb' | 'adjective';
+
+/**
+ * Can this word usually be deleted without breaking the sentence? True for
+ * adverbs ("very", "really", "quickly") and words that are only adjectives
+ * ("reliable"), never for nouns or verbs ("battery", "track").
+ */
+export function isDroppable(m: Morphology, word: string): boolean {
+  const w = word.toLowerCase();
+  if (m.n.has(w) || m.v.has(w)) return m.r.has(w) && !m.n.has(w);
+  return m.r.has(w) || m.a.has(w);
+}
 
 export interface Candidate {
   base: string;

@@ -18,11 +18,14 @@ interface Props {
   settings: Settings;
   selection: Selection | null;
   onSelect: (s: Selection) => void;
+  /** Opens the first overused word for fixing. */
+  onStartFixing?: () => void;
+  issueCount: number;
 }
 
 const times = (n: number) => `used ${n} ${n === 1 ? 'time' : 'times'}`;
 
-export default function Results({ analysis, settings, selection, onSelect }: Props) {
+export default function Results({ analysis, settings, selection, onSelect, onStartFixing, issueCount }: Props) {
   const [tab, setTab] = useState<Tab>('sections');
 
   const separateCommon = settings.commonWords === 'separate';
@@ -154,6 +157,17 @@ export default function Results({ analysis, settings, selection, onSelect }: Pro
         )}
       </div>
 
+      {onStartFixing && (
+        <div className="fix-start">
+          <span>
+            {issueCount} overused {issueCount === 1 ? 'word' : 'words'} to fix.
+          </span>
+          <button type="button" className="btn sm" onClick={onStartFixing}>
+            Fix them one by one →
+          </button>
+        </div>
+      )}
+
       <div className="tabs" role="tablist">
         <button role="tab" type="button" aria-selected={tab === 'sections'} onClick={() => setTab('sections')}>
           By section <span className="tag">{analysis.sections.length}</span>
@@ -170,7 +184,7 @@ export default function Results({ analysis, settings, selection, onSelect }: Pro
         <span className="dot sev-ok" /> fine
         <span className="dot sev-warn" /> repetitive
         <span className="dot sev-high" /> overused
-        <span className="muted"> · Click any word to see every place it is used.</span>
+        <span className="muted"> · Click any word to see and fix every place it is used.</span>
       </p>
 
       {tab === 'sections' &&

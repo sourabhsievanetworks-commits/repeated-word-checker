@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useDeferredValue, useEffect, useMemo, useState } from 'react';
+import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
 import { analyze, parseWordList, type Group, type ScopeResult } from '@/lib/analyze';
 import type { DocModel } from '@/lib/document';
 import { loadMorphology, type Morphology } from '@/lib/morphology';
@@ -9,7 +9,8 @@ import { buildReport } from '@/lib/report';
 import { SAMPLE_TEXT } from '@/lib/sample';
 import { sanitizeHtml } from '@/lib/sanitize';
 import { DEFAULT_SETTINGS, type Settings } from '@/lib/settings';
-import Editor from './Editor';
+import Editor, { type EditorApi } from './Editor';
+import type { Edit } from '@/lib/editing';
 import HighlightView from './HighlightView';
 import Results, { type Selection } from './Results';
 import SettingsPanel from './SettingsPanel';
@@ -32,6 +33,9 @@ export default function Checker() {
   const [settings, setSettings] = useState<Settings>(DEFAULT_SETTINGS);
   const [restored, setRestored] = useState(false);
   const [selection, setSelection] = useState<Selection | null>(null);
+  const [lastMessage, setLastMessage] = useState<string | null>(null);
+  const editorApi = useRef<EditorApi | null>(null);
+  const lastName = useRef('');
   const [pasteNote, setPasteNote] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [morphology, setMorphology] = useState<Morphology | null>(null);
@@ -127,6 +131,46 @@ export default function Checker() {
   const separate = (spelling: string) =>
     setSettings((s) => ({ ...s, separateWords: [s.separateWords.trim(), spelling].filter(Boolean).join(', ') }));
 
+  if (selected) lastName.current = selected.group.display;
+
+  // Every overused word, worst first: the order of "Next word to fix".
+  const { commonWords: commonMode, sectionWarn, wholeWarn } = settings;
+  const issues = useMemo(() => {
+    const quiet = (g: Group) => commonMode === 'separate' && (g.common || g.number || g.link);
+    const list: { sel: Selection; label: string; count: number }[] = [];
+    for (const s of analysis.sections)
+      for (const g of s.words)
+        if (!quiet(g) && g.count >= sectionWarn) list.push({ sel: { scopeId: s.id, kind: 'word', key: g.key }, label: `“${g.display}” in ${s.title}`, count: g.count });
+    list.sort((a, b) => b.count - a.count);
+    for (const g of analysis.whole.words)
+      if (!quiet(g) && g.count >= wholeWarn) list.push({ sel: { scopeId: 'all', kind: 'word', key: g.key }, label: `“${g.display}” in the whole blog`, count: g.count });
+    return list;
+  }, [analysis, commonMode, sectionWarn, wholeWarn]);
+
+  const sameSelection = (a: Selection, b: Selection) => a.scopeId === b.scopeId && a.kind === b.kind && a.key === b.key;
+  const nextIssue = (() => {
+    if (!selection) return issues[0] ?? null;
+    const at = issues.findIndex((i) => sameSelection(i.sel, selection));
+    return (at >= 0 ? issues[at + 1] : null) ?? issues.find((i) => !sameSelection(i.sel, selection)) ?? null;
+  })();
+  const open = (sel: Selection | null) => {
+    setSelection(sel);
+    setLastMessage(null);
+  };
+  const next = nextIssue ? { label: nextIssue.label, go: () => open(nextIssue.sel) } : null;
+
+  // Fixes are applied only when the results match the document exactly.
+  const busy = analysed !== doc;
+  const applyFix = (edits: Edit[], message: string) => {
+    const ok = !busy && (editorApi.current?.apply(analysed, edits) ?? false);
+    if (ok) setLastMessage(message);
+    return ok;
+  };
+  const undoFix = () => {
+    if (editorApi.current?.undo()) setLastMessage('Undone. The text is back as it was.');
+  };
+  const limitFor = (scopeId: string) => Math.max(1, (scopeId === 'all' ? wholeWarn : sectionWarn) - 1);
+
   const levelCounts = [1, 2, 3, 4, 5, 6]
     .map((l) => [l, doc.headings.filter((h) => h.level === l).length] as const)
     .filter(([, n]) => n > 0);
@@ -164,8 +208,8 @@ export default function Checker() {
       <main className="grid">
         <section className="pane editor" aria-label="Your blog">
           {/* The editor stays mounted (hidden) while highlights show, so nothing is lost. */}
-          <div className="editor-host" hidden={Boolean(selected)}>
-            <Editor html={loadHtml} loadKey={loadKey} onChange={onEditorChange} onPasteNote={setPasteNote} />
+          <div className="editor-host" hidden={Boolean(selection)}>
+            <Editor html={loadHtml} loadKey={loadKey} onChange={onEditorChange} onPasteNote={setPasteNote} apiRef={editorApi} />
             <div className="status">
               <span>{analysis.check.totalWords.toLocaleString()} words</span>
               {levelCounts.length ? (
@@ -189,8 +233,41 @@ export default function Checker() {
               kind={selection!.kind}
               usage={usage}
               onSeparate={useForms ? separate : undefined}
-              onClose={() => setSelection(null)}
+              onClose={() => open(null)}
+              morphology={useForms ? morphology : null}
+              busy={busy}
+              limit={limitFor(selected.scope.id)}
+              onApply={applyFix}
+              onUndo={undoFix}
+              undoCount={editorApi.current?.undoCount() ?? 0}
+              lastMessage={lastMessage}
+              next={next}
             />
+          )}
+          {selection && !selected && (
+            <div className="highlight">
+              <div className="goal done">
+                <span>✓ “{lastName.current}” is no longer used here.</span>
+                {next && (
+                  <button type="button" className="btn sm" onClick={next.go}>
+                    Next word to fix: {next.label} →
+                  </button>
+                )}
+                <button type="button" className="btn ghost sm" onClick={() => open(null)}>
+                  Back to editing
+                </button>
+              </div>
+              {lastMessage && (
+                <div className="fix-done">
+                  <span>{lastMessage}</span>
+                  {(editorApi.current?.undoCount() ?? 0) > 0 && (
+                    <button type="button" className="btn ghost sm" onClick={undoFix} disabled={busy}>
+                      Undo
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
           )}
         </section>
 
@@ -203,7 +280,14 @@ export default function Checker() {
             <p className="banner error">The dictionary could not load. Showing exact spellings instead.</p>
           )}
           {analysed.text.trim() ? (
-            <Results analysis={analysis} settings={settings} selection={selection} onSelect={setSelection} />
+            <Results
+              analysis={analysis}
+              settings={settings}
+              selection={selection}
+              onSelect={open}
+              onStartFixing={issues.length ? () => open(issues[0].sel) : undefined}
+              issueCount={issues.length}
+            />
           ) : (
             <div className="empty">
               <p>Your results will appear here.</p>

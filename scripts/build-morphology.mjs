@@ -81,7 +81,7 @@ for (const line of lines(path.join(dict, 'index.sense'))) {
   if (freq[pos]) freq[pos].set(lemma, (freq[pos].get(lemma) ?? 0) + Number(tag));
 }
 
-const FILES = { n: 'noun', v: 'verb', a: 'adj' };
+const FILES = { n: 'noun', v: 'verb', a: 'adj', r: 'adv' };
 const lemmas = {};
 for (const [pos, name] of Object.entries(FILES)) {
   lemmas[pos] = new Set();
@@ -113,6 +113,7 @@ const out = {
   n: [...lemmas.n].sort().join(' '),
   v: [...lemmas.v].sort().join(' '),
   a: [...lemmas.a].sort().join(' '),
+  r: [...lemmas.r].sort().join(' '),
   nf: counts('n'),
   vf: counts('v'),
   af: counts('a'),

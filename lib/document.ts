@@ -18,12 +18,37 @@ export type Block =
   | { kind: 'list'; ordered: boolean; items: (Range & { depth: number })[] }
   | { kind: 'table'; rows: (Range & { header: boolean })[][] };
 
+/** Where a character of the counted text sits in the document. */
+export interface Source {
+  node: Text;
+  offset: number;
+}
+
 export interface DocModel {
   text: string;
   blocks: Block[];
   headings: HeadingLine[];
   tableCount: number;
+  /**
+   * For each character of `text`, the document text node and offset it was
+   * read from (null for line breaks the reader added). Lets a fix replace
+   * exactly the word that was counted, inside its formatting.
+   */
+  sources?: (Source | null)[];
 }
+
+/** Text with the source of every character. */
+interface Traced {
+  s: string;
+  src: (Source | null)[];
+}
+
+const EMPTY: Traced = { s: '', src: [] };
+const traced = (s: string, src: Source | null = null): Traced => ({ s, src: Array.from({ length: s.length }, () => src) });
+const join = (...parts: Traced[]): Traced => ({ s: parts.map((p) => p.s).join(''), src: parts.flatMap((p) => p.src) });
+const slice = (t: Traced, a: number, b = t.s.length): Traced => ({ s: t.s.slice(a, b), src: t.src.slice(a, b) });
+/** Replaces single characters, keeping each one's source. */
+const mapChars = (t: Traced, from: RegExp, to: string): Traced => ({ s: t.s.replace(from, to), src: t.src });
 
 const BLOCK_TAGS = new Set([
   'p', 'div', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'ul', 'ol', 'li', 'table', 'thead', 'tbody', 'tfoot',
@@ -36,48 +61,69 @@ const tagOf = (n: Node) => (n.nodeType === 1 ? (n as Element).tagName.toLowerCas
 const isBlock = (n: Node) => BLOCK_TAGS.has(tagOf(n));
 
 /** Text of inline content; <br> becomes a line break, source whitespace collapses. */
-function inlineText(node: Node, pre = false): string {
+function inlineText(node: Node, pre = false): Traced {
   if (node.nodeType === 3) {
     const v = node.nodeValue ?? '';
-    return pre ? v : v.replace(/[ \t\n\r\f]+/g, ' ');
+    const text = node as Text;
+    let s = '';
+    const src: Source[] = [];
+    for (let i = 0; i < v.length; i++) {
+      const space = !pre && /[ \t\n\r\f]/.test(v[i]);
+      if (space && s.endsWith(' ') && src.length && /[ \t\n\r\f]/.test(v[src[src.length - 1].offset])) continue;
+      s += space ? ' ' : v[i];
+      src.push({ node: text, offset: i });
+    }
+    return { s, src };
   }
-  if (node.nodeType !== 1) return '';
+  if (node.nodeType !== 1) return EMPTY;
   const tag = tagOf(node);
-  if (SKIP_TAGS.has(tag)) return '';
-  if (tag === 'br') return '\n';
-  let out = '';
+  if (SKIP_TAGS.has(tag)) return EMPTY;
+  if (tag === 'br') return traced('\n');
+  let out = EMPTY;
   node.childNodes.forEach((c) => {
     const t = inlineText(c, pre || tag === 'pre');
     // Blocks nested inside inline content still start on a new line.
-    out += isBlock(c) && out && !out.endsWith('\n') ? '\n' + t : t;
+    out = isBlock(c) && out.s && !out.s.endsWith('\n') ? join(out, traced('\n'), t) : join(out, t);
   });
   return out;
 }
 
 /** Trims each line and drops empty ones (they hold no words). */
-const tidy = (s: string) =>
-  s
-    .split('\n')
-    .map((l) => l.replace(/^[ \t\u00A0]+|[ \t\u00A0]+$/g, ''))
-    .filter(Boolean)
-    .join('\n');
+function tidy(t: Traced): Traced {
+  const lines: Traced[] = [];
+  let at = 0;
+  for (const part of t.s.split('\n')) {
+    let line = slice(t, at, at + part.length);
+    at += part.length + 1;
+    const lead = /^[ \t\u00A0]*/.exec(line.s)![0].length;
+    const trail = /[ \t\u00A0]*$/.exec(line.s)![0].length;
+    line = slice(line, lead, line.s.length - trail);
+    if (line.s) lines.push(line);
+  }
+  return lines.reduce((acc, l, i) => (i ? join(acc, traced('\n'), l) : l), EMPTY);
+}
 
 export function modelFromElement(root: Element): DocModel {
   let text = '';
+  const sources: (Source | null)[] = [];
   const blocks: Block[] = [];
   const headings: HeadingLine[] = [];
   let tableCount = 0;
 
-  const line = (s: string): Range => {
-    if (text) text += '\n';
+  const line = (t: Traced): Range => {
+    if (text) {
+      text += '\n';
+      sources.push(null);
+    }
     const start = text.length;
-    text += s;
+    text += t.s;
+    sources.push(...t.src);
     return { start, end: text.length };
   };
 
-  const paragraph = (raw: string) => {
+  const paragraph = (raw: Traced) => {
     const t = tidy(raw);
-    if (t) blocks.push({ kind: 'paragraph', ...line(t) });
+    if (t.s) blocks.push({ kind: 'paragraph', ...line(t) });
   };
 
   const list = (el: Element, depth: number, items: (Range & { depth: number })[]) => {
@@ -86,18 +132,18 @@ export function modelFromElement(root: Element): DocModel {
         if (isBlock(li) && (tagOf(li) === 'ul' || tagOf(li) === 'ol')) list(li as Element, depth + 1, items);
         else {
           const t = tidy(inlineText(li));
-          if (t) items.push({ ...line(t), depth });
+          if (t.s) items.push({ ...line(t), depth });
         }
         return;
       }
-      let own = '';
+      let own = EMPTY;
       const nested: Element[] = [];
       li.childNodes.forEach((c) => {
         if (tagOf(c) === 'ul' || tagOf(c) === 'ol') nested.push(c as Element);
-        else own += inlineText(c);
+        else own = join(own, inlineText(c));
       });
       const t = tidy(own);
-      if (t) items.push({ ...line(t), depth });
+      if (t.s) items.push({ ...line(t), depth });
       nested.forEach((n) => list(n, depth + 1, items));
     });
   };
@@ -110,7 +156,7 @@ export function modelFromElement(root: Element): DocModel {
       tr.childNodes.forEach((c) => {
         const tag = tagOf(c);
         if (tag !== 'td' && tag !== 'th') return;
-        cells.push({ ...line(tidy(inlineText(c)).replace(/\n+/g, ' ')), header: tag === 'th' });
+        cells.push({ ...line(mapChars(tidy(inlineText(c)), /\n/g, ' ')), header: tag === 'th' });
       });
       if (cells.length) rows.push(cells);
     });
@@ -121,14 +167,14 @@ export function modelFromElement(root: Element): DocModel {
   };
 
   const walk = (parent: Node) => {
-    let inline = '';
+    let inline = EMPTY;
     const flush = () => {
       paragraph(inline);
-      inline = '';
+      inline = EMPTY;
     };
     parent.childNodes.forEach((n) => {
       if (!isBlock(n)) {
-        inline += inlineText(n);
+        inline = join(inline, inlineText(n));
         return;
       }
       flush();
@@ -136,9 +182,10 @@ export function modelFromElement(root: Element): DocModel {
       const tag = tagOf(n);
       const h = /^h([1-6])$/.exec(tag);
       if (h) {
-        const title = tidy(inlineText(el)).replace(/\s*\n\s*/g, ' ');
+        const traced = mapChars(tidy(inlineText(el)), /\n/g, ' ');
+        const title = traced.s;
         if (!title) return;
-        const r = line(title);
+        const r = line(traced);
         const level = Number(h[1]);
         blocks.push({ kind: 'heading', level, ...r });
         headings.push({ title, level, ...r });
@@ -162,7 +209,7 @@ export function modelFromElement(root: Element): DocModel {
   };
 
   walk(root);
-  return { text, blocks, headings, tableCount };
+  return { text, blocks, headings, tableCount, sources };
 }
 
 export function modelFromHtml(html: string, parser: DOMParser = new DOMParser()): DocModel {

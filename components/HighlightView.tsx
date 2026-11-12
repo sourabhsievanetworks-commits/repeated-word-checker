@@ -3,8 +3,10 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import type { Group, ScopeResult } from '@/lib/analyze';
 import type { DocModel, Range } from '@/lib/document';
+import type { Edit } from '@/lib/editing';
 import { findCheck } from '@/lib/findCount';
-import { alternatives, loadThesaurus, type Alternatives } from '@/lib/thesaurus';
+import type { Morphology } from '@/lib/morphology';
+import FixPanel from './FixPanel';
 
 interface Props {
   doc: DocModel;
@@ -16,6 +18,18 @@ interface Props {
   /** Count this spelling on its own from now on (word-forms mode). */
   onSeparate?: (spelling: string) => void;
   onClose: () => void;
+  morphology: Morphology | null;
+  /** True while the results are catching up with the last change. */
+  busy: boolean;
+  /** Fewest uses that still count as fine in this scope. */
+  limit: number;
+  onApply: (edits: Edit[], message: string) => boolean;
+  onUndo: () => void;
+  undoCount: number;
+  /** What the last fix did, shown with an Undo button. */
+  lastMessage: string | null;
+  /** The next overused word, if any. */
+  next: { label: string; go: () => void } | null;
 }
 
 interface Mark extends Range {
@@ -36,30 +50,25 @@ function marksFor(group: Group): Mark[] {
 }
 
 /** Shows the blog with its real headings, lists and tables, every use of the word highlighted. */
-export default function HighlightView({ doc, group, scope, kind, usage, onSeparate, onClose }: Props) {
+export default function HighlightView(props: Props) {
+  const { doc, group, scope, kind, usage, onSeparate, onClose, morphology, busy, limit, onApply, onUndo, undoCount, lastMessage, next } = props;
   const [active, setActive] = useState(0);
-  const [options, setOptions] = useState<Alternatives[]>([]);
   const markRefs = useRef(new Map<number, HTMLElement>());
   const marks = useMemo(() => marksFor(group), [group]);
   const n = group.occurrences.length;
 
-  useEffect(() => setActive(0), [group.key, scope.id]);
+  // Start on a use worth changing: the first that comes close after another,
+  // else the second (the first use of a word is usually fine).
+  useEffect(() => {
+    const close = group.closeAt.findIndex((c, i) => c && i > 0);
+    setActive(close > 0 ? close : n > 1 ? 1 : 0);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [group.key, scope.id]);
+  // After a fix the list is shorter: stay on the same spot.
+  useEffect(() => setActive((a) => Math.min(a, Math.max(0, n - 1))), [n]);
   useEffect(() => {
     markRefs.current.get(active)?.scrollIntoView({ block: 'center', behavior: 'smooth' });
   }, [active, marks]);
-
-  // Suggested alternatives for this word (not for phrases, common words or numbers).
-  useEffect(() => {
-    setOptions([]);
-    if (kind !== 'word' || group.common || group.number || group.link) return;
-    let current = true;
-    loadThesaurus()
-      .then((t) => current && setOptions(alternatives(t, [group.key, ...group.forms.map((f) => f.form)])))
-      .catch(() => undefined);
-    return () => {
-      current = false;
-    };
-  }, [group.key, group.forms, group.common, group.number, group.link, kind]);
 
   const closeCount = group.closeAt.filter(Boolean).length;
 
@@ -135,8 +144,47 @@ export default function HighlightView({ doc, group, scope, kind, usage, onSepara
           </button>
         </div>
       </div>
-      {(options.length > 0 || closeCount > 0 || (find && find.elsewhere.length > 0) || (group.forms.length > 1 && splittable.length > 0)) && (
-        <div className="hl-extra">
+      <div className={`goal ${n <= limit ? 'done' : ''}`}>
+        {n <= limit ? (
+          <span>
+            ✓ Now used {n} {n === 1 ? 'time' : 'times'} here, within your limit.
+          </span>
+        ) : (
+          <span>
+            Change {n - limit} of these {n} to get to {limit} or fewer.{' '}
+            <span className="muted">Pick a use below or click one in the text.</span>
+          </span>
+        )}
+        {next && (
+          <button type="button" className="btn sm" onClick={next.go} title="Go to the next overused word">
+            Next word to fix: {next.label} →
+          </button>
+        )}
+      </div>
+      {lastMessage && (
+        <div className="fix-done">
+          <span>{lastMessage}</span>
+          {undoCount > 0 && (
+            <button type="button" className="btn ghost sm" onClick={onUndo} disabled={busy}>
+              Undo
+            </button>
+          )}
+        </div>
+      )}
+      <FixPanel
+        doc={doc}
+        group={group}
+        kind={kind}
+        index={active}
+        morphology={morphology}
+        usage={usage}
+        busy={busy}
+        onApply={onApply}
+        onKeep={() => step(1)}
+      />
+      {(closeCount > 0 || (find && find.elsewhere.length > 0) || (group.forms.length > 1 && splittable.length > 0)) && (
+        <details className="hl-extra">
+          <summary>More about “{group.display}”</summary>
           {group.forms.length > 1 && splittable.length > 0 && (
             <p>
               <span className="muted">Counted together: </span>
@@ -174,20 +222,7 @@ export default function HighlightView({ doc, group, scope, kind, usage, onSepara
               previous use (underlined in red).
             </p>
           )}
-          {options.map((o) => (
-            <p key={o.as}>
-              <span className="muted">Possible alternatives ({o.as}): </span>
-              {o.words.map((w, i) => (
-                <span key={w}>
-                  {i > 0 && ' · '}
-                  <strong>{w}</strong>
-                  {usage.get(w) ? <span className="muted"> (already used ×{usage.get(w)})</span> : null}
-                </span>
-              ))}
-              <span className="muted"> — check that it fits your sentence.</span>
-            </p>
-          ))}
-        </div>
+        </details>
       )}
       <div className="doc-scroll">
         <div className="doc readonly">

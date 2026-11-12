@@ -46,3 +46,11 @@ describe('dictionary rules', () => {
     expect(m.v.has('organise')).toBe(false);
   });
 });
+
+describe('isDroppable', () => {
+  it('allows deleting adverbs and pure adjectives, never nouns or verbs', async () => {
+    const { isDroppable } = await import('@/lib/morphology');
+    for (const w of ['very', 'really', 'quickly', 'actually', 'reliable', 'Very']) expect(isDroppable(m, w), w).toBe(true);
+    for (const w of ['battery', 'tracker', 'track', 'price', 'use', 'help']) expect(isDroppable(m, w), w).toBe(false);
+  });
+});

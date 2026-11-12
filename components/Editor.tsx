@@ -2,9 +2,20 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { modelFromElement, modelFromHtml, type DocModel } from '@/lib/document';
+import { applyEdits, type Edit } from '@/lib/editing';
 import { plainTextToHtml } from '@/lib/plainText';
 import { sanitizeHtml } from '@/lib/sanitize';
 import { tokenize } from '@/lib/tokenize';
+
+/** Lets the fix panel change the document without the person retyping. */
+export interface EditorApi {
+  /** Applies edits made against `model`; false if the document has changed since. */
+  apply(model: DocModel, edits: Edit[]): boolean;
+  /** Undoes the last fix; false if there is none. */
+  undo(): boolean;
+  /** Number of fixes that can be undone. */
+  undoCount(): number;
+}
 
 interface Props {
   /** HTML to load. The editor reloads whenever loadKey changes. */
@@ -12,6 +23,7 @@ interface Props {
   loadKey: number;
   onChange: (model: DocModel, html: string) => void;
   onPasteNote: (note: string | null) => void;
+  apiRef?: React.MutableRefObject<EditorApi | null>;
 }
 
 const STYLES = [
@@ -26,8 +38,11 @@ const STYLES = [
 
 const wordCount = (s: string) => tokenize(s).length;
 
-export default function Editor({ html, loadKey, onChange, onPasteNote }: Props) {
+export default function Editor({ html, loadKey, onChange, onPasteNote, apiRef }: Props) {
   const ref = useRef<HTMLDivElement>(null);
+  // The document before each fix, for Undo. Typing clears it: undoing a fix
+  // must never throw away words typed after it.
+  const fixHistory = useRef<string[]>([]);
   const [style, setStyle] = useState('p');
   const [empty, setEmpty] = useState(true);
   const savedRange = useRef<Range | null>(null);
@@ -41,8 +56,36 @@ export default function Editor({ html, loadKey, onChange, onPasteNote }: Props) 
   }, [onChange]);
 
   useEffect(() => {
+    if (!apiRef) return;
+    apiRef.current = {
+      apply(model, edits) {
+        const el = ref.current;
+        if (!el) return false;
+        const before = el.innerHTML;
+        if (!applyEdits(el, model, edits)) return false;
+        fixHistory.current.push(before);
+        emit();
+        return true;
+      },
+      undo() {
+        const el = ref.current;
+        const before = fixHistory.current.pop();
+        if (!el || before === undefined) return false;
+        el.innerHTML = before;
+        emit();
+        return true;
+      },
+      undoCount: () => fixHistory.current.length,
+    };
+    return () => {
+      apiRef.current = null;
+    };
+  }, [apiRef, emit]);
+
+  useEffect(() => {
     const el = ref.current;
     if (!el) return;
+    fixHistory.current = [];
     el.innerHTML = html;
     emit();
     // Only reload when asked to (example, clear, restore), never while typing.
@@ -113,6 +156,7 @@ export default function Editor({ html, loadKey, onChange, onPasteNote }: Props) 
       fromFormatting = false;
     }
     insertHtml(clean);
+    fixHistory.current = [];
     emit();
     const m = modelFromHtml(clean);
     const parts = [
@@ -167,7 +211,10 @@ export default function Editor({ html, loadKey, onChange, onPasteNote }: Props) 
           aria-label="Your blog"
           spellCheck
           data-placeholder="Paste your blog here, straight from Google Docs, WordPress or Word. Headings (H1, H2, H3…) and tables are kept."
-          onInput={emit}
+          onInput={() => {
+            fixHistory.current = [];
+            emit();
+          }}
           onPaste={onPaste}
         />
       </div>

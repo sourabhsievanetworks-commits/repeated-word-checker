@@ -8,6 +8,13 @@ Paste a blog post and see which words and phrases you repeat, both **in each sec
 ## Features
 
 - **Document editor like Google Docs.** Paste from Google Docs, WordPress, Word or a web page, and the headings (H1–H6, labelled in the margin), lists, tables and bold/italic are kept. A style menu (Normal text, Heading 1–6) and list buttons let you fix or add headings. No `#` symbols are needed.
+- **Fix repeated words in place.** Click a word (or **Fix them one by one**) and the tool walks you through each use:
+  - It shows the sentence, with ready-made replacements already in the right form (*bought → purchased*, *trackers → devices*), with capitals kept. Words you already use are marked.
+  - Click one and the word changes inside your document, keeping its bold, list or table formatting. The counts update at once, and **Undo** puts it back.
+  - **Delete** is offered only for words that can usually be dropped (*very*, *really*, *quickly*), never for nouns or verbs, where it would break the sentence. A comma right after the word goes with it, and the next word gets the capital if needed.
+  - **Type your own** replaces the word with anything you write. **Keep, next** leaves this use and moves to the next.
+  - A goal line says how many uses to change ("Change 3 of these 5 to get to 2 or fewer") and turns green when you're within your limit. **Next word to fix** goes to the next overused word, worst first.
+  - A fix is applied only if the document still says exactly what was counted at that spot; otherwise nothing is changed.
 - **Section by section.** You get the Introduction and then each H2, each with its own list of repeated words.
 - **Table view.** Every word is a row, with a column for the Introduction and for each H2, plus the total. You can show repeated words only or all words, and switch between words and phrases. The footer checks that each column adds up to that section's word count. Copy it straight into Google Sheets or Excel.
 - **Colour levels.** Green is fine, amber is repetitive, red is overused. You can change the limits for a single section and for the whole blog.
