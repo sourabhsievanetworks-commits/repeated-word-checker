@@ -219,3 +219,55 @@ const LOOKALIKES: [string, string, string][] = [
 ];
 
 export const PRECISION: BenchmarkCase[] = LOOKALIKES.map(([a, b, text]) => ({ text, apart: [[a, b]] }));
+
+/**
+ * Fresh sentences written after the dictionary rules were finished and run
+ * once before anything was changed, to measure how well the rules carry over
+ * to words they were never tuned on.
+ */
+export const FRESH: BenchmarkCase[] = [
+  { text: 'Drivers drive trucks. The driver drove home. Driving takes hours. Trucks are driven daily.', same: [['drive', 'drove', 'driving', 'driven'], ['drivers', 'driver']] },
+  { text: 'She teaches math. He taught it. Teaching is hard. We teach daily.', same: [['teaches', 'taught', 'teaching', 'teach']] },
+  { text: 'Fresh bread sells. Fresher bread sells faster. The freshest loaf is gone.', same: [['fresh', 'fresher', 'freshest']] },
+  { text: 'A wolf howls. Wolves howl. The wolf howled.', same: [['wolf', 'wolves'], ['howls', 'howl', 'howled']] },
+  { text: 'One shelf is full. Shelves line the wall. Fill each shelf.', same: [['shelf', 'shelves']] },
+  { text: 'Leaves fall. A leaf falls. The leaf is red.', same: [['leaves', 'leaf']] },
+  { text: 'The test passes. We pass it. Tests passed. He passed away.', same: [['passes', 'pass', 'passed']] },
+  { text: 'Firms grew. Growing firms hire. The firm grows. Growth continues.', same: [['grew', 'growing', 'grows']], apart: [['growth', 'grew']] },
+  { text: 'The big bus is late. Bigger buses cost more. Buses run daily.', same: [['big', 'bigger'], ['bus', 'buses']] },
+  { text: 'She studied hard. Students study daily. Studying helps.', same: [['studied', 'study', 'studying']], apart: [['students', 'study']] },
+  { text: 'They carried boxes. Carrying is hard. She carries one.', same: [['carried', 'carrying', 'carries']] },
+  { text: 'Policies change. One policy applies. Every policy helps.', same: [['policies', 'policy']] },
+  { text: 'Teams played. A team won. The team plays well. A good player.', same: [['teams', 'team'], ['played', 'plays']], apart: [['player', 'plays']] },
+  { text: 'Readers read it. Reading is fun. A reader reads daily.', same: [['read', 'reads', 'reading']], apart: [['reader', 'read']] },
+  { text: 'It mattered. Matters get worse. The matter is closed.', same: [['mattered', 'matters', 'matter']] },
+  { text: 'Houses cost more. A house sells fast. House prices rise. Housing is scarce.', same: [['houses', 'house']], apart: [['housing', 'house']] },
+  { text: 'Tracking Devices\nWe track devices. Device tracking helps. A tracked device.', same: [['tracking', 'track', 'tracked']] },
+  { text: 'Kids use apps. This app is free. Two apps sync. The app syncs.', same: [['apps', 'app']] },
+  { text: 'Gases leak. The gas is toxic. Gas prices rise.', same: [['gases', 'gas']] },
+  { text: 'A series of tests. Another series ended. This series is long.', apart: [['series', 'serie']] },
+  { text: 'Wires broke. A wire snapped. They wired it. Wiring helps.', same: [['wires', 'wire', 'wired']] },
+  { text: 'It cannot lose signal. A loose cable. Do not lose it.', apart: [['lose', 'loose']] },
+  { text: 'The council met. Counsel advised us. The council voted.', apart: [['council', 'counsel']] },
+  { text: 'We accept cards. Except for fees. They accept cash.', apart: [['accept', 'except']] },
+  { text: 'The principal agreed. A core principle holds. Principal parts.', apart: [['principal', 'principle']] },
+  { text: 'Dry desert air. A sweet dessert. The desert is wide.', apart: [['desert', 'dessert']] },
+  { text: 'Whether it works. The weather is hot. Check the weather.', apart: [['whether', 'weather']] },
+  { text: 'A fine complement. A kind compliment. A compliment helps.', apart: [['complement', 'compliment']] },
+  { text: 'The writer writes. Writing helps. Writers wrote it. A writer left.', same: [['writes', 'writing', 'wrote']], apart: [['writer', 'writes']] },
+  { text: 'Mice nibble. A mouse hides. Mouse traps help.', same: [['mice', 'mouse']] },
+  { text: 'Lives changed. A life is long. Lives matter.', same: [['lives', 'life']] },
+  { text: 'We buy. They bought it. Buying helps. Buyers buy.', same: [['buy', 'bought', 'buying']], apart: [['buyers', 'buy']] },
+  { text: 'The tallest tower. A taller tower. Tall towers sway.', same: [['tallest', 'taller', 'tall']], apart: [['tower', 'tall']] },
+  { text: 'A sweet treat. Sweeter treats win. The sweetest treat.', same: [['sweet', 'sweeter', 'sweetest']] },
+  { text: 'It happened fast. Things happen. This happens often. Happening now.', same: [['happened', 'happen', 'happens', 'happening']] },
+  { text: 'Sales rose. A sale ended. The sales team sells. Selling helps.', same: [['sales', 'sale'], ['sells', 'selling']] },
+  { text: 'They bring gifts. Bringing one helps. She brought two. Brings joy.', same: [['bring', 'bringing', 'brought', 'brings']] },
+  { text: 'Fishing is fun. They fish daily. A fisher fished. Fish swim.', same: [['fish', 'fished']], apart: [['fisher', 'fish']] },
+  { text: 'An older model. The old one. The oldest unit.', same: [['older', 'old', 'oldest']] },
+  { text: 'Reasons vary. The reason is clear. Reasoning helps.', same: [['reasons', 'reason']] },
+  { text: 'She sang. They sing daily. Singing helps. A song.', same: [['sang', 'sing', 'singing']], apart: [['song', 'sing']] },
+  { text: 'We listened. They listen daily. Listening helps. A listener.', same: [['listened', 'listen', 'listening']], apart: [['listener', 'listen']] },
+  { text: 'Better plans win. The best plan wins. A good plan.', apart: [['better', 'best'], ['better', 'good']] },
+  { text: 'The mailing list. Mail it now. Mails arrive. The mailer.', same: [['mail', 'mails']], apart: [['mailer', 'mail']] },
+];

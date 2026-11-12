@@ -8,22 +8,23 @@
     "start": "next start",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
-    "build:thesaurus": "node scripts/build-thesaurus.mjs"
+    "build:thesaurus": "node scripts/build-thesaurus.mjs",
+    "build:morphology": "node scripts/build-morphology.mjs"
   },
   "dependencies": {
     "next": "^16.4.3",
     "react": "^19.3.1",
-    "react-dom": "^19.3.1",
-    "wink-eng-lite-web-model": "^1.8.1",
-    "wink-nlp": "^2.4.0"
+    "react-dom": "^19.3.1"
   },
   "devDependencies": {
     "@types/node": "^22.20.5",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
+    "dictionary-en": "^4.0.0",
     "jsdom": "^26.1.0",
     "typescript": "5.9",
     "vitest": "^5.0.5",
+    "wink-lexicon": "^2.2.0",
     "wordnet-db": "^3.1.14"
   }
 }

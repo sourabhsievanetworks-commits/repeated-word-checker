@@ -7,10 +7,10 @@ import type { CommonWords, Settings } from '@/lib/settings';
 interface Props {
   settings: Settings;
   onChange: (s: Settings) => void;
-  modelState: 'idle' | 'loading' | 'ready' | 'error';
+  dictionaryState: 'idle' | 'loading' | 'ready' | 'error';
 }
 
-export default function SettingsPanel({ settings, onChange, modelState }: Props) {
+export default function SettingsPanel({ settings, onChange, dictionaryState }: Props) {
   const [open, setOpen] = useState(false);
   const set = <K extends keyof Settings>(k: K, v: Settings[K]) => onChange({ ...settings, [k]: v });
   const num = (k: 'sectionWarn' | 'sectionHigh' | 'wholeWarn' | 'wholeHigh' | 'closeWindow') => (
@@ -31,7 +31,7 @@ export default function SettingsPanel({ settings, onChange, modelState }: Props)
       <div className="settings-main">
         <div className="seg" role="radiogroup" aria-label="How to count">
           <button type="button" role="radio" aria-checked={settings.mode === 'forms'} onClick={() => set('mode', 'forms')}>
-            Word forms (AI){settings.mode === 'forms' && modelState === 'loading' ? '…' : ''}
+            Word forms{settings.mode === 'forms' && dictionaryState === 'loading' ? '…' : ''}
           </button>
           <button type="button" role="radio" aria-checked={settings.mode === 'exact'} onClick={() => set('mode', 'exact')}>
             Exact spelling
@@ -44,7 +44,7 @@ export default function SettingsPanel({ settings, onChange, modelState }: Props)
       <p className="hint">
         {settings.mode === 'exact'
           ? 'Counts every spelling on its own (ignoring capital letters): “tracker” and “trackers” are separate rows.'
-          : 'A language model reads each word in its sentence and counts forms of the same word together: track, tracks, tracked, tracking → “track”. The spellings it grouped are listed under each word.'}
+          : 'An American English dictionary and fixed rules count forms of the same word together: track, tracks, tracked, tracking → “track”. No AI is used, and the spellings grouped are listed under each word.'}
       </p>
 
       {open && (

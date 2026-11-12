@@ -1,19 +1,14 @@
-import { beforeAll, describe, expect, it } from 'vitest';
-import winkNLP from 'wink-nlp';
-import model from 'wink-eng-lite-web-model';
+import { readFileSync } from 'node:fs';
+import { describe, expect, it } from 'vitest';
 import { analyze, DEFAULT_OPTIONS, type Group } from '@/lib/analyze';
-import { createLemmatizer, type Lemmatizer } from '@/lib/lemmatizer';
+import { parseMorphology } from '@/lib/morphology';
 
-let lemmatize: Lemmatizer;
-beforeAll(() => {
-  lemmatize = createLemmatizer(winkNLP(model) as never);
-});
-
-const run = (text: string) =>
-  analyze(text, { ...DEFAULT_OPTIONS, mode: 'forms', headingMode: 'off' }, lemmatize(text)).whole;
+const morphology = parseMorphology(JSON.parse(readFileSync('public/morphology.json', 'utf8')));
+const run = (text: string, options = {}) =>
+  analyze(text, { ...DEFAULT_OPTIONS, mode: 'forms', headingMode: 'off', ...options }, morphology).whole;
 const counts = (groups: Group[]) => Object.fromEntries(groups.map((g) => [g.key, g.count]));
 
-describe('word forms (NLP model)', () => {
+describe('word forms (dictionary)', () => {
   it('groups plurals, possessives and verb forms', () => {
     const w = run("Trackers help. The tracker works. A tracker's battery. Batteries die. He ran, then runs, running daily.");
     const c = counts(w.words);
@@ -37,8 +32,14 @@ describe('word forms (NLP model)', () => {
   });
 
   it('keeps contractions as written', () => {
-    const c = counts(analyze("Don't stop. Don't go.", { ...DEFAULT_OPTIONS, mode: 'forms', ignoreStopwords: false, headingMode: 'off' }, lemmatize("Don't stop. Don't go.")).whole.words);
+    const c = counts(run("Don't stop. Don't go.", { ignoreStopwords: false }).words);
     expect(c["don't"]).toBe(2);
+  });
+
+  it('gives the same answer every time', () => {
+    const text = 'Drivers drive. The driver drove. Driving takes time. Trucks are driven daily. Fresh, fresher, freshest.';
+    const first = JSON.stringify(run(text).words);
+    for (let i = 0; i < 5; i++) expect(JSON.stringify(run(text).words)).toBe(first);
   });
 
   it('never changes the number of words counted', () => {

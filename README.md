@@ -13,9 +13,9 @@ Paste a blog post and see which words and phrases you repeat, both **in each sec
 - **Colour levels.** Green is fine, amber is repetitive, red is overused. You can change the limits for a single section and for the whole blog.
 - **Click a word to see every place it is used.** Each place is highlighted and numbered, and you can step through them one by one.
 - **Repeated phrases** of 2–3 words (for example "GPS tracker"). Phrases never cross punctuation or line breaks.
-- **Word forms (AI), on by default.** An English NLP model ([wink-nlp](https://winkjs.org/wink-nlp/)) reads each word in its sentence and counts forms of the same word together: *track / tracks / tracked / tracking*, *battery / batteries*, *big / bigger / biggest*. The spellings it grouped are always listed. Switch to **Exact spelling** to count each spelling on its own.
+- **Word forms, on by default. No AI.** An open-source American English dictionary and fixed rules count forms of the same word together: *track / tracks / tracked / tracking*, *battery / batteries*, *big / bigger / biggest*, *run / ran*. The same text always gives the same result. The spellings grouped are always listed. Switch to **Exact spelling** to count each spelling on its own.
 - **Close repeats.** Flags a word used again within a few words of its previous use (12 by default), which is the repetition readers notice most. They're underlined in red in the highlighted view.
-- **Suggested alternatives.** Click an overused word to see possible replacements from a built-in thesaurus (*buy → purchase*, *use → apply, employ, utilize*). The model's part-of-speech reading picks the right kind of synonym, and words you already use are marked. Only well-attested synonyms are included, so many words have no suggestion.
+- **Suggested alternatives.** Click an overused word to see possible replacements from a built-in thesaurus (*buy → purchase*, *use → apply, employ, utilize*), grouped by noun / verb / adjective, with words you already use marked. Only well-attested synonyms are included, so many words have no suggestion.
 - **Find (Ctrl+F) reconciliation.** Ctrl+F also matches inside longer words, so its number is often higher than a whole-word count. Click a word and the tool shows where the difference comes from: *"Find for 'track' shows 8 here: 3 counted above, and 5 inside other words: tracker ×4 · trackers ×1"*.
 - **Every word is counted.** Common words (the, and, is…), numbers, heading text and words used only once are all counted and listed. Common words and numbers sit in their own groups so they don't drown out real repetition.
 - **Self-check.** The results open with a coverage line ("✓ All 1,234 words read, counts add up to 1,234"). It also warns if any letter or digit in the text was not read.
@@ -40,16 +40,24 @@ Counts come from a deterministic tokenizer (`lib/tokenize.ts`), not from a model
 
 ## How word forms are grouped
 
-In **Word forms** mode the model only decides *which group* a word belongs to. It never changes how many words are counted. The grouping (`lib/wordForms.ts`) works in two steps:
+The whole tool works without AI or machine learning: counting, grouping and suggestions are fixed rules plus open dictionary data, so the same text always gives the same result.
 
-1. **Model vote.** The model tags every occurrence with a part of speech and a dictionary form. All occurrences of one spelling vote, so one spelling never lands in two groups.
-2. **Evidence rules.** Forms the model leaves alone ("-ing" nouns like *tracking*, "-ed" adjectives like *trusted*, comparatives like *longer*, plurals of words it doesn't know like *apps*) join a base word only when that base word is itself in the text and is used there as a matching kind of word. An "-ing" word joins a base only if the base is used as a verb: *tracking* joins *we track*, but *parenting* does not join *parents*.
+In **Word forms** mode the dictionary only decides *which group* a word belongs to. It never changes how many words are counted. The data (`public/morphology.json`, about 220 KB compressed, built by `npm run build:morphology`) combines:
 
-Words that look different are never joined (*best* / *good*, *went* / *go*), and neither are different words that happen to share letters (*evening* / *even*, *news* / *new*, *user* / *use*).
+- **Princeton WordNet**: which words exist as nouns, verbs and adjectives, WordNet's irregular forms (*ran → run*, *children → child*), and how often each word is used in each role in WordNet's hand-tagged text.
+- **SCOWL / Hunspell en_US**, the American English word list used by spell checkers. A word is used as a base only if it is in both, so British spellings (*colour*, *organise*) and obscure words are never bases.
+
+The grouping (`lib/morphology.ts`, `lib/wordForms.ts`) applies fixed rules:
+
+1. **Inflections only.** A spelling can be a plural, third person, past tense, *-ing* form, comparative or superlative of a dictionary word. Derived words are separate words: *tracker* is not *track*, *player* is not *play*.
+2. **The text must show the link.** A spelling joins a base only when at least two different spellings in the text lead to it. *"Turn left. He left."* stays *left*; *"We leave. He left."* groups *leave / left*.
+3. **Usage evidence for look-alikes.** A form that is also a word in its own right joins a verb only when WordNet's tagged text shows that verb is about as common: *limited* joins *limit*, but *tired* does not join *tire*, *evening* does not join *even*, *parenting* does not join *parent*, *feed* is not the past of *fee*, and *number* is not a comparative of *numb*.
+4. **Words the dictionary doesn't know** (brands, new words) group their plural only when the singular is in the text too: *Jiobit / Jiobits*, *app / apps*.
+5. **Different-looking forms stay apart:** *best* / *good*, *went* / *go*.
 
 If you disagree with a grouping, click the word and choose **count separately** next to a spelling. It is counted on its own from then on (Settings lists these words).
 
-Accuracy is measured by four benchmarks in `tests/` (316 expectations): hand-written blog sentences, held-out sentences, every form of 120 common verbs, nouns and adjectives, and 60 pairs of look-alike words that must never be grouped. The current grouping meets all of them; the first version met 235 of the first 256. The tests fail if accuracy drops. A benchmark can't cover every sentence in English, which is why groupings are always shown and can be split.
+Accuracy is measured by five benchmarks in `tests/`: hand-written blog sentences, held-out sentences, every form of 120 common verbs, nouns and adjectives, 60 pairs of look-alike words that must never be grouped (316 expectations, all met), and a fresh set of 62 written after the rules were finished and run once without changes. On the fresh set the rules meet 61 of 62. The one miss: *housing* is grouped with *house*, though it is a separate noun. The tests fail if accuracy drops. No benchmark covers every English sentence, which is why groupings are always shown and can be split.
 
 The thesaurus (`public/thesaurus.json`, about 10 KB compressed, loaded on first use) is built from [Princeton WordNet](https://wordnet.princeton.edu/) by `npm run build:thesaurus`. It keeps only each word's dominant meaning and synonyms attested at least five times in that meaning, so rare senses don't produce bad suggestions.
 
@@ -61,6 +69,7 @@ npm run dev     # http://localhost:3000
 npm test        # unit tests, including randomised cross-checks against an independent counter
 npm run build
 npm run build:thesaurus   # only needed to regenerate public/thesaurus.json
+npm run build:morphology  # only needed to regenerate public/morphology.json
 ```
 
 ## Deploy

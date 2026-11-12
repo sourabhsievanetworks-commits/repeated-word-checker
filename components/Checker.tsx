@@ -3,7 +3,7 @@
 import { useCallback, useDeferredValue, useEffect, useMemo, useState } from 'react';
 import { analyze, parseWordList, type Group, type ScopeResult } from '@/lib/analyze';
 import type { DocModel } from '@/lib/document';
-import { loadLemmatizer, type Lemmatizer } from '@/lib/lemmatizer';
+import { loadMorphology, type Morphology } from '@/lib/morphology';
 import { plainTextToHtml } from '@/lib/plainText';
 import { buildReport } from '@/lib/report';
 import { SAMPLE_TEXT } from '@/lib/sample';
@@ -22,7 +22,7 @@ const SETTINGS_KEY = 'rwc:settings:v3';
 
 const EMPTY_MODEL: DocModel = { text: '', blocks: [], headings: [], tableCount: 0 };
 
-type ModelState = 'idle' | 'loading' | 'ready' | 'error';
+type DictionaryState = 'idle' | 'loading' | 'ready' | 'error';
 
 export default function Checker() {
   const [loadHtml, setLoadHtml] = useState('');
@@ -34,8 +34,8 @@ export default function Checker() {
   const [selection, setSelection] = useState<Selection | null>(null);
   const [pasteNote, setPasteNote] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
-  const [lemmatizer, setLemmatizer] = useState<Lemmatizer | null>(null);
-  const [modelState, setModelState] = useState<ModelState>('idle');
+  const [morphology, setMorphology] = useState<Morphology | null>(null);
+  const [dictionaryState, setDictionaryState] = useState<DictionaryState>('idle');
 
   const load = (html: string) => {
     setLoadHtml(html);
@@ -71,15 +71,15 @@ export default function Checker() {
   }, [savedHtml, settings, restored]);
 
   useEffect(() => {
-    if (settings.mode !== 'forms' || lemmatizer) return;
-    setModelState('loading');
-    loadLemmatizer()
-      .then((l) => {
-        setLemmatizer(() => l);
-        setModelState('ready');
+    if (settings.mode !== 'forms' || morphology) return;
+    setDictionaryState('loading');
+    loadMorphology()
+      .then((m) => {
+        setMorphology(m);
+        setDictionaryState('ready');
       })
-      .catch(() => setModelState('error'));
-  }, [settings.mode, lemmatizer]);
+      .catch(() => setDictionaryState('error'));
+  }, [settings.mode, morphology]);
 
   const onEditorChange = useCallback((model: DocModel, html: string) => {
     setDoc(model);
@@ -87,11 +87,7 @@ export default function Checker() {
   }, []);
 
   const analysed = useDeferredValue(doc);
-  const useForms = settings.mode === 'forms' && lemmatizer !== null;
-  const lemmaSpans = useMemo(
-    () => (useForms && lemmatizer ? lemmatizer(analysed.text) : null),
-    [useForms, lemmatizer, analysed],
-  );
+  const useForms = settings.mode === 'forms' && morphology !== null;
 
   const { mode, commonWords, includeHeadings, includeNumbers, splitHyphens, headingMode, ignoreWords, separateWords, closeWindow } = settings;
   const analysis = useMemo(
@@ -109,10 +105,10 @@ export default function Checker() {
           separateWords: parseWordList(separateWords),
           closeWindow,
         },
-        lemmaSpans,
+        morphology,
         analysed.headings,
       ),
-    [analysed, useForms, commonWords, includeHeadings, includeNumbers, splitHyphens, headingMode, ignoreWords, separateWords, closeWindow, lemmaSpans],
+    [analysed, useForms, commonWords, includeHeadings, includeNumbers, splitHyphens, headingMode, ignoreWords, separateWords, closeWindow, morphology],
   );
 
   const selected = useMemo(() => {
@@ -199,12 +195,12 @@ export default function Checker() {
         </section>
 
         <section className="pane results" aria-label="Repeated words">
-          <SettingsPanel settings={settings} onChange={setSettings} modelState={modelState} />
-          {mode === 'forms' && modelState === 'loading' && (
-            <p className="banner">Loading the language model… showing exact words until it is ready.</p>
+          <SettingsPanel settings={settings} onChange={setSettings} dictionaryState={dictionaryState} />
+          {mode === 'forms' && dictionaryState === 'loading' && (
+            <p className="banner">Loading the dictionary… showing exact spellings until it is ready.</p>
           )}
-          {mode === 'forms' && modelState === 'error' && (
-            <p className="banner error">The language model could not load. Showing exact words instead.</p>
+          {mode === 'forms' && dictionaryState === 'error' && (
+            <p className="banner error">The dictionary could not load. Showing exact spellings instead.</p>
           )}
           {analysed.text.trim() ? (
             <Results analysis={analysis} settings={settings} selection={selection} onSelect={setSelection} />

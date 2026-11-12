@@ -54,12 +54,12 @@ export default function HighlightView({ doc, group, scope, kind, usage, onSepara
     if (kind !== 'word' || group.common || group.number || group.link) return;
     let current = true;
     loadThesaurus()
-      .then((t) => current && setOptions(alternatives(t, [group.key, ...group.forms.map((f) => f.form)], group.pos)))
+      .then((t) => current && setOptions(alternatives(t, [group.key, ...group.forms.map((f) => f.form)])))
       .catch(() => undefined);
     return () => {
       current = false;
     };
-  }, [group.key, group.pos, group.forms, group.common, group.number, kind]);
+  }, [group.key, group.forms, group.common, group.number, group.link, kind]);
 
   const closeCount = group.closeAt.filter(Boolean).length;
 

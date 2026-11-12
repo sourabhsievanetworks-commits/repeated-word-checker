@@ -1,7 +1,7 @@
 import { tokenize, normalizeKey, stripPossessive, uncountedCharacters, type Token } from './tokenize';
 import { isStopword } from './stopwords';
 import { sectionsFromHeadings, splitSections, type HeadingLine, type HeadingMode } from './sections';
-import type { LemmaSpan } from './lemmatizer';
+import type { Morphology } from './morphology';
 import { groupWordForms } from './wordForms';
 
 export type CountMode = 'exact' | 'forms';
@@ -56,8 +56,6 @@ export interface Group {
   number: boolean;
   /** A web or e-mail address: listed, but not flagged as repetition. */
   link: boolean;
-  /** Part of speech the model saw most often (word-forms mode only). */
-  pos?: string;
   /** How many uses come within a few words of the previous use ("close repeats"). */
   close: number;
   /** For each occurrence: is it part of a close repeat (it or its neighbour)? */
@@ -226,7 +224,7 @@ function dropContainedPhrases(phrases: Group[]): Group[] {
 export function analyze(
   text: string,
   options: AnalyzeOptions,
-  lemmaSpans?: LemmaSpan[] | null,
+  morphology?: Morphology | null,
   headings?: HeadingLine[],
 ): Analysis {
   const tokens = tokenize(text, { splitHyphens: options.splitHyphens });
@@ -238,9 +236,8 @@ export function analyze(
 
   // Group key for every token.
   let keyOf = new Map<Token, string>();
-  let posOf = new Map<string, string>();
-  if (options.mode === 'forms' && lemmaSpans) {
-    ({ keyOf, posOf } = groupWordForms(tokens, lemmaSpans, new Set(options.separateWords.map(normalizeKey))));
+  if (options.mode === 'forms' && morphology) {
+    ({ keyOf } = groupWordForms(tokens, morphology, new Set(options.separateWords.map(normalizeKey))));
   } else {
     for (const t of tokens) keyOf.set(t, stripPossessive(t.key));
   }
@@ -305,7 +302,7 @@ export function analyze(
       start: range[0],
       end: range[1],
       wordCount: scopeTokens.length,
-      words: finish(words, 1, options.closeWindow).map((g) => (posOf.has(g.key) ? { ...g, pos: posOf.get(g.key) } : g)),
+      words: finish(words, 1, options.closeWindow),
       phrases: dropContainedPhrases(finish(phrases, 2, options.closeWindow)),
     };
   };
