@@ -8,9 +8,11 @@ import { DEFAULT_OPTIONS, type AnalyzeOptions } from './analyze';
  */
 export type CommonWords = 'separate' | 'flag' | 'hide';
 
-export interface Settings extends Omit<AnalyzeOptions, 'ignoreWords' | 'ignoreStopwords'> {
+export interface Settings extends Omit<AnalyzeOptions, 'ignoreWords' | 'separateWords' | 'ignoreStopwords'> {
   commonWords: CommonWords;
   ignoreWords: string;
+  /** Spellings never grouped with other forms, separated by commas. */
+  separateWords: string;
   sectionWarn: number;
   sectionHigh: number;
   wholeWarn: number;
@@ -24,6 +26,7 @@ export const DEFAULT_SETTINGS: Settings = {
   mode: 'forms',
   commonWords: 'separate',
   ignoreWords: '',
+  separateWords: '',
   sectionWarn: 3,
   sectionHigh: 5,
   wholeWarn: 8,

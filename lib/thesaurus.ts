@@ -13,7 +13,7 @@ const POS_LABEL: Record<PosKey, string> = { n: 'noun', v: 'verb', a: 'adjective'
 
 let loading: Promise<Thesaurus> | null = null;
 
-/** Loads the thesaurus on first use (about 120 KB compressed). */
+/** Loads the thesaurus on first use (about 10 KB compressed). */
 export function loadThesaurus(): Promise<Thesaurus> {
   loading ??= fetch('/thesaurus.json').then((r) => {
     if (!r.ok) throw new Error(`thesaurus: ${r.status}`);

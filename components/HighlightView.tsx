@@ -3,6 +3,7 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import type { Group, ScopeResult } from '@/lib/analyze';
 import type { DocModel, Range } from '@/lib/document';
+import { findCheck } from '@/lib/findCount';
 import { alternatives, loadThesaurus, type Alternatives } from '@/lib/thesaurus';
 
 interface Props {
@@ -12,6 +13,8 @@ interface Props {
   kind: 'word' | 'phrase';
   /** How many times each word is already used in the blog. */
   usage: Map<string, number>;
+  /** Count this spelling on its own from now on (word-forms mode). */
+  onSeparate?: (spelling: string) => void;
   onClose: () => void;
 }
 
@@ -33,7 +36,7 @@ function marksFor(group: Group): Mark[] {
 }
 
 /** Shows the blog with its real headings, lists and tables, every use of the word highlighted. */
-export default function HighlightView({ doc, group, scope, kind, usage, onClose }: Props) {
+export default function HighlightView({ doc, group, scope, kind, usage, onSeparate, onClose }: Props) {
   const [active, setActive] = useState(0);
   const [options, setOptions] = useState<Alternatives[]>([]);
   const markRefs = useRef(new Map<number, HTMLElement>());
@@ -48,7 +51,7 @@ export default function HighlightView({ doc, group, scope, kind, usage, onClose 
   // Suggested alternatives for this word (not for phrases, common words or numbers).
   useEffect(() => {
     setOptions([]);
-    if (kind !== 'word' || group.common || group.number) return;
+    if (kind !== 'word' || group.common || group.number || group.link) return;
     let current = true;
     loadThesaurus()
       .then((t) => current && setOptions(alternatives(t, [group.key, ...group.forms.map((f) => f.form)], group.pos)))
@@ -59,6 +62,13 @@ export default function HighlightView({ doc, group, scope, kind, usage, onClose 
   }, [group.key, group.pos, group.forms, group.common, group.number, kind]);
 
   const closeCount = group.closeAt.filter(Boolean).length;
+
+  // What Find (Ctrl+F) would show for this word, and where the difference comes from.
+  const find = useMemo(
+    () => (kind === 'word' && !group.link ? findCheck(doc.text, scope, group.display, group.occurrences) : null),
+    [doc.text, scope, group, kind],
+  );
+  const splittable = kind === 'word' && onSeparate ? group.forms.filter((f) => f.form !== group.key) : [];
 
   const step = (d: number) => setActive((a) => (a + d + n) % n);
 
@@ -125,8 +135,39 @@ export default function HighlightView({ doc, group, scope, kind, usage, onClose 
           </button>
         </div>
       </div>
-      {(options.length > 0 || closeCount > 0) && (
+      {(options.length > 0 || closeCount > 0 || (find && find.elsewhere.length > 0) || (group.forms.length > 1 && splittable.length > 0)) && (
         <div className="hl-extra">
+          {group.forms.length > 1 && splittable.length > 0 && (
+            <p>
+              <span className="muted">Counted together: </span>
+              {group.forms.map((f, i) => (
+                <span key={f.form}>
+                  {i > 0 && ' · '}
+                  {f.form} ×{f.count}
+                  {f.form !== group.key && (
+                    <button type="button" className="split" title={`Count “${f.form}” on its own from now on`} onClick={() => onSeparate!(f.form)}>
+                      count separately
+                    </button>
+                  )}
+                </span>
+              ))}
+            </p>
+          )}
+          {find && find.elsewhere.length > 0 && (
+            <p>
+              <span className="muted">
+                Find (Ctrl+F) for “{find.needle}” shows {find.total} here: {find.counted} counted above, and {find.total - find.counted} inside other
+                words:{' '}
+              </span>
+              {find.elsewhere.slice(0, 8).map((e, i) => (
+                <span key={e.word}>
+                  {i > 0 && ' · '}
+                  {e.word} ×{e.count}
+                </span>
+              ))}
+              {find.elsewhere.length > 8 && ' …'}
+            </p>
+          )}
           {closeCount > 0 && (
             <p>
               <span className="close-key" /> {group.close} {group.close === 1 ? 'repeat comes' : 'repeats come'} within a few words of the

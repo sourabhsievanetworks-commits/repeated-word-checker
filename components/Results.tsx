@@ -26,8 +26,8 @@ export default function Results({ analysis, settings, selection, onSelect }: Pro
   const [tab, setTab] = useState<Tab>('sections');
 
   const separateCommon = settings.commonWords === 'separate';
-  // Common words and numbers are counted and listed, but not flagged.
-  const isCommon = (g: Group) => separateCommon && (g.common || g.number);
+  // Common words, numbers and links are counted and listed, but not flagged.
+  const isCommon = (g: Group) => separateCommon && (g.common || g.number || g.link);
   const sectionSev = (g: Group): Severity => (isCommon(g) ? 'common' : severity(g.count, settings.sectionWarn, settings.sectionHigh));
   const wholeSev = (g: Group): Severity => (isCommon(g) ? 'common' : severity(g.count, settings.wholeWarn, settings.wholeHigh));
 
@@ -37,7 +37,7 @@ export default function Results({ analysis, settings, selection, onSelect }: Pro
   overused.sort((a, b) => b.group.count - a.group.count);
   const overusedWhole = analysis.whole.words.filter((g) => !isCommon(g) && wholeSev(g) !== 'ok');
   const closeRepeats = analysis.sections.flatMap((s) =>
-    s.words.filter((g) => g.close > 0 && !g.common && !g.number).map((g) => ({ scope: s, group: g })),
+    s.words.filter((g) => g.close > 0 && !g.common && !g.number && !g.link).map((g) => ({ scope: s, group: g })),
   );
   closeRepeats.sort((a, b) => b.group.close - a.group.close || b.group.count - a.group.count);
 
@@ -89,8 +89,9 @@ export default function Results({ analysis, settings, selection, onSelect }: Pro
   );
 
   const scopeBody = (s: ScopeResult, sev: (g: Group) => Severity) => {
-    const common = s.words.filter((g) => isCommon(g) && !g.number);
-    const numbers = s.words.filter((g) => isCommon(g) && g.number);
+    const common = s.words.filter((g) => isCommon(g) && !g.number && !g.link);
+    const numbers = s.words.filter((g) => isCommon(g) && (g.number || g.link));
+    const hasLinks = numbers.some((g) => g.link);
     const rest = s.words.filter((g) => !isCommon(g));
     const repeated = rest.filter((g) => g.count >= 2);
     const once = rest.filter((g) => g.count === 1);
@@ -119,7 +120,7 @@ export default function Results({ analysis, settings, selection, onSelect }: Pro
         {numbers.length > 0 && (
           <details className="more">
             <summary>
-              Numbers: {numbers.length} different, {sum(numbers)} uses
+              {hasLinks ? 'Numbers and links' : 'Numbers'}: {numbers.length} different, {sum(numbers)} uses
             </summary>
             {chips(s, numbers)}
           </details>

@@ -88,6 +88,10 @@ export default function SettingsPanel({ settings, onChange, modelState }: Props)
             <label>Close together: the same word again within {num('closeWindow')} words</label>
           </fieldset>
           <label className="field wide">
+            Words to count on their own, never grouped with other forms, separated by commas
+            <input type="text" value={settings.separateWords} placeholder="e.g. tracking, meeting" onChange={(e) => set('separateWords', e.target.value)} />
+          </label>
+          <label className="field wide">
             Words to skip (brand names, your main keyword…), separated by commas
             <input type="text" value={settings.ignoreWords} placeholder="e.g. Garmin, inReach" onChange={(e) => set('ignoreWords', e.target.value)} />
           </label>

@@ -93,7 +93,7 @@ export default function Checker() {
     [useForms, lemmatizer, analysed],
   );
 
-  const { mode, commonWords, includeHeadings, includeNumbers, splitHyphens, headingMode, ignoreWords, closeWindow } = settings;
+  const { mode, commonWords, includeHeadings, includeNumbers, splitHyphens, headingMode, ignoreWords, separateWords, closeWindow } = settings;
   const analysis = useMemo(
     () =>
       analyze(
@@ -106,12 +106,13 @@ export default function Checker() {
           splitHyphens,
           headingMode,
           ignoreWords: parseWordList(ignoreWords),
+          separateWords: parseWordList(separateWords),
           closeWindow,
         },
         lemmaSpans,
         analysed.headings,
       ),
-    [analysed, useForms, commonWords, includeHeadings, includeNumbers, splitHyphens, headingMode, ignoreWords, closeWindow, lemmaSpans],
+    [analysed, useForms, commonWords, includeHeadings, includeNumbers, splitHyphens, headingMode, ignoreWords, separateWords, closeWindow, lemmaSpans],
   );
 
   const selected = useMemo(() => {
@@ -125,6 +126,10 @@ export default function Checker() {
 
   // How often each word is already used, so suggested alternatives can say so.
   const usage = useMemo(() => new Map(analysis.whole.words.map((g) => [g.key, g.count])), [analysis]);
+
+  // "Count separately": remember a spelling that should never be grouped.
+  const separate = (spelling: string) =>
+    setSettings((s) => ({ ...s, separateWords: [s.separateWords.trim(), spelling].filter(Boolean).join(', ') }));
 
   const levelCounts = [1, 2, 3, 4, 5, 6]
     .map((l) => [l, doc.headings.filter((h) => h.level === l).length] as const)
@@ -187,6 +192,7 @@ export default function Checker() {
               scope={selected.scope}
               kind={selection!.kind}
               usage={usage}
+              onSeparate={useForms ? separate : undefined}
               onClose={() => setSelection(null)}
             />
           )}

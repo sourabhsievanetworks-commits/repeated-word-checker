@@ -109,7 +109,11 @@ export interface WordForms {
   posOf: Map<string, string>;
 }
 
-export function groupWordForms(tokens: Token[], spans: LemmaSpan[]): WordForms {
+/**
+ * @param standalone Spellings the writer chose to count on their own: they are
+ *   never grouped with another form.
+ */
+export function groupWordForms(tokens: Token[], spans: LemmaSpan[], standalone: ReadonlySet<string> = new Set()): WordForms {
   // 1. Collect the model's reading of every occurrence.
   const lemmaVotes = new Map<string, Map<string, number>>();
   const posVotes = new Map<string, Map<string, number>>();
@@ -120,6 +124,10 @@ export function groupWordForms(tokens: Token[], spans: LemmaSpan[]): WordForms {
     if (!seenAs.has(word)) seenAs.set(word, new Set());
     seenAs.get(word)!.add(p);
   };
+  // Words used as a verb in some form other than "-ing" ("track", "tracked",
+  // "tracks"). An "-ing" word on its own is weak evidence: "parenting" does not
+  // make "parent" a verb.
+  const usedAsVerb = new Set<string>();
   const surfaceOf = new Map<Token, string>();
   let j = 0;
   for (const t of tokens) {
@@ -135,7 +143,7 @@ export function groupWordForms(tokens: Token[], spans: LemmaSpan[]): WordForms {
       (covered.length === 1 ||
         (covered.length === 2 && covered[1].pos === 'PART' && POSSESSIVE.has(covered[1].value.replace(/\u2019/g, "'"))));
     let lemma = surface;
-    if (read) {
+    if (read && !standalone.has(surface) && !standalone.has(t.key)) {
       const l = covered[0].lemma.toLowerCase().replace(/\u2019/g, "'");
       // Dictionary forms that look nothing like the written word ("best" -> "good",
       // "went" -> "go") are not heard as repetition, so the word keeps its spelling.
@@ -144,6 +152,10 @@ export function groupWordForms(tokens: Token[], spans: LemmaSpan[]): WordForms {
       vote(posVotes, surface, covered[0].pos);
       see(surface, covered[0].pos);
       see(lemma, covered[0].pos);
+      if ((covered[0].pos === 'VERB' || covered[0].pos === 'AUX') && !surface.endsWith('ing')) {
+        usedAsVerb.add(surface);
+        usedAsVerb.add(lemma);
+      }
     }
     vote(lemmaVotes, surface, lemma);
   }
@@ -151,7 +163,11 @@ export function groupWordForms(tokens: Token[], spans: LemmaSpan[]): WordForms {
   // 2. Each spelling takes its majority reading (ties keep the spelling as written).
   const base = new Map<string, string>();
   const pos = new Map<string, string>();
-  for (const [surface, votes] of lemmaVotes) base.set(surface, majority(votes, surface));
+  for (const [surface, votes] of lemmaVotes) {
+    const choice = majority(votes, surface);
+    const weak = surface.endsWith('ing') && choice !== surface && !usedAsVerb.has(choice);
+    base.set(surface, weak ? surface : choice);
+  }
   for (const [surface, votes] of posVotes) pos.set(surface, majority(votes, ''));
 
   // 3. Evidence rules for forms the model left untouched.
@@ -160,16 +176,17 @@ export function groupWordForms(tokens: Token[], spans: LemmaSpan[]): WordForms {
     if (c.word[0] !== from[0] || isStopword(c.word) || !present.has(c.word)) return false;
     const kinds = seenAs.get(c.word);
     const sawAs = (...ps: string[]) => ps.some((p) => kinds?.has(p));
-    // A participle joins a word the model saw as a verb or noun, never an
-    // unrelated adjective such as "even" for "evening".
-    if (c.kind === 'verb') return kinds === undefined || sawAs('VERB', 'NOUN', 'AUX', 'PROPN');
+    // A participle joins a word the model saw used as a verb ("tracking" with
+    // "we track"), never a noun or adjective that only looks related
+    // ("parenting" / "parent", "evening" / "even").
+    if (c.kind === 'verb') return kinds === undefined || usedAsVerb.has(c.word);
     if (c.kind === 'noun') return sawAs('NOUN', 'PROPN');
     return sawAs('ADJ', 'ADV');
   };
   // Applies to spellings in the text and to dictionary forms the model produced
   // ("recordings" -> "recording" -> "record").
   for (const word of present) {
-    if ((base.get(word) ?? word) !== word || isStopword(word)) continue;
+    if ((base.get(word) ?? word) !== word || isStopword(word) || standalone.has(word)) continue;
     const kinds = seenAs.get(word);
     const p = pos.get(word) ?? (kinds?.has('NOUN') ? 'NOUN' : kinds?.values().next().value);
     const found = baseCandidates(word, p).find((c) => usable(c, word));

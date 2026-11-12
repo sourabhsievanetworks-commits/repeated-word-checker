@@ -15,7 +15,8 @@ Paste a blog post and see which words and phrases you repeat, both **in each sec
 - **Repeated phrases** of 2–3 words (for example "GPS tracker"). Phrases never cross punctuation or line breaks.
 - **Word forms (AI), on by default.** An English NLP model ([wink-nlp](https://winkjs.org/wink-nlp/)) reads each word in its sentence and counts forms of the same word together: *track / tracks / tracked / tracking*, *battery / batteries*, *big / bigger / biggest*. The spellings it grouped are always listed. Switch to **Exact spelling** to count each spelling on its own.
 - **Close repeats.** Flags a word used again within a few words of its previous use (12 by default), which is the repetition readers notice most. They're underlined in red in the highlighted view.
-- **Suggested alternatives.** Click an overused word to see possible replacements from a built-in thesaurus (*buy → purchase*, *use → apply, employ, utilize*). The model's part-of-speech reading picks the right kind of synonym, and words you already use are marked.
+- **Suggested alternatives.** Click an overused word to see possible replacements from a built-in thesaurus (*buy → purchase*, *use → apply, employ, utilize*). The model's part-of-speech reading picks the right kind of synonym, and words you already use are marked. Only well-attested synonyms are included, so many words have no suggestion.
+- **Find (Ctrl+F) reconciliation.** Ctrl+F also matches inside longer words, so its number is often higher than a whole-word count. Click a word and the tool shows where the difference comes from: *"Find for 'track' shows 8 here: 3 counted above, and 5 inside other words: tracker ×4 · trackers ×1"*.
 - **Every word is counted.** Common words (the, and, is…), numbers, heading text and words used only once are all counted and listed. Common words and numbers sit in their own groups so they don't drown out real repetition.
 - **Self-check.** The results open with a coverage line ("✓ All 1,234 words read, counts add up to 1,234"). It also warns if any letter or digit in the text was not read.
 - You can still choose to skip common words, numbers, headings, or your own list of words (such as brand names) in Settings.
@@ -27,7 +28,9 @@ Counts come from a deterministic tokenizer (`lib/tokenize.ts`), not from a model
 
 - Matching ignores case: *Tracker* = *tracker*.
 - Possessives count toward the word: *tracker's* counts as *tracker* (the spelling is shown). Contractions like *it's* and *let's* stay as they are.
-- Hyphenated words are split, so every part is counted: *GPS-enabled* counts as *GPS* + *enabled*. You can turn this off in Settings.
+- Hyphenated words are split, so every part is counted: *GPS-enabled* counts as *GPS* + *enabled*. They stay whole when a part isn't a word on its own: *Wi-Fi*, *e-mail*, *t-shirt*, *co-founder*, *re-enter*, *non-stop*. You can turn splitting off in Settings.
+- A web address or e-mail address is one item. It is never broken into *www*, *com* and the words in its path.
+- *US*, *IT* and *WHO* in capitals are their own words, separate from *us*, *it* and *who*.
 - Contractions are one word: *don't*, *isn't*.
 - Prices and decimals stay whole: *$129.99*, *1.5*, *2,000*.
 - Curly and straight apostrophes are treated the same. So are accented letters typed in different ways.
@@ -40,13 +43,15 @@ Counts come from a deterministic tokenizer (`lib/tokenize.ts`), not from a model
 In **Word forms** mode the model only decides *which group* a word belongs to. It never changes how many words are counted. The grouping (`lib/wordForms.ts`) works in two steps:
 
 1. **Model vote.** The model tags every occurrence with a part of speech and a dictionary form. All occurrences of one spelling vote, so one spelling never lands in two groups.
-2. **Evidence rules.** Forms the model leaves alone ("-ing" nouns like *tracking*, "-ed" adjectives like *trusted*, comparatives like *longer*, plurals of words it doesn't know like *apps*) join a base word only when that base word is itself in the text and the model saw it as a matching kind of word.
+2. **Evidence rules.** Forms the model leaves alone ("-ing" nouns like *tracking*, "-ed" adjectives like *trusted*, comparatives like *longer*, plurals of words it doesn't know like *apps*) join a base word only when that base word is itself in the text and is used there as a matching kind of word. An "-ing" word joins a base only if the base is used as a verb: *tracking* joins *we track*, but *parenting* does not join *parents*.
 
 Words that look different are never joined (*best* / *good*, *went* / *go*), and neither are different words that happen to share letters (*evening* / *even*, *news* / *new*, *user* / *use*).
 
-Accuracy is measured by three benchmarks in `tests/` (256 expectations): hand-written blog sentences, held-out sentences, and every form of 120 common verbs, nouns and adjectives. The current grouping meets 255 of them; the first version met 235. The tests fail if accuracy drops.
+If you disagree with a grouping, click the word and choose **count separately** next to a spelling. It is counted on its own from then on (Settings lists these words).
 
-The thesaurus (`public/thesaurus.json`, about 120 KB compressed, loaded on first use) is built from [Princeton WordNet](https://wordnet.princeton.edu/) by `npm run build:thesaurus`. It keeps only each word's dominant meaning and synonyms attested in that meaning, so rare senses don't produce bad suggestions.
+Accuracy is measured by four benchmarks in `tests/` (316 expectations): hand-written blog sentences, held-out sentences, every form of 120 common verbs, nouns and adjectives, and 60 pairs of look-alike words that must never be grouped. The current grouping meets all of them; the first version met 235 of the first 256. The tests fail if accuracy drops. A benchmark can't cover every sentence in English, which is why groupings are always shown and can be split.
+
+The thesaurus (`public/thesaurus.json`, about 10 KB compressed, loaded on first use) is built from [Princeton WordNet](https://wordnet.princeton.edu/) by `npm run build:thesaurus`. It keeps only each word's dominant meaning and synonyms attested at least five times in that meaning, so rare senses don't produce bad suggestions.
 
 ## Development
 

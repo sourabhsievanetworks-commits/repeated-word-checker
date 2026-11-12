@@ -51,12 +51,12 @@ export default function WordTable({ analysis, settings, selection, onSelect }: P
   }, [analysis, kind, sections, sectionOf]);
 
   const q = normalizeKey(query.trim());
-  const quiet = (g: Group) => g.common || g.number;
+  const quiet = (g: Group) => g.common || g.number || g.link;
   const visible = rows.filter(
     ({ g }) =>
       (show === 'all' || g.count >= 2) &&
       !(hideCommon && quiet(g)) &&
-      (!q || g.key.includes(q) || g.forms.some((f) => f.form.includes(q))),
+      (!q || g.key.toLowerCase().includes(q) || g.forms.some((f) => f.form.toLowerCase().includes(q))),
   );
 
   const flag = (g: Group, n: number, warn: number, high: number) =>
@@ -102,7 +102,7 @@ export default function WordTable({ analysis, settings, selection, onSelect }: P
         </div>
         <label className="check small">
           <input type="checkbox" checked={hideCommon} onChange={(e) => setHideCommon(e.target.checked)} />
-          Hide common words &amp; numbers
+          Hide common words, numbers &amp; links
         </label>
         <button type="button" className="btn ghost sm" onClick={copyTable}>
           {copied ? 'Copied' : 'Copy for Google Sheets'}

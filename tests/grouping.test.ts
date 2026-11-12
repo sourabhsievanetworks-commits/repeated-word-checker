@@ -3,7 +3,7 @@ import winkNLP from 'wink-nlp';
 import model from 'wink-eng-lite-web-model';
 import { analyze, DEFAULT_OPTIONS, type Group } from '@/lib/analyze';
 import { createLemmatizer, type Lemmatizer } from '@/lib/lemmatizer';
-import { BENCHMARK, HELD_OUT } from './grouping-benchmark';
+import { BENCHMARK, HELD_OUT, PRECISION } from './grouping-benchmark';
 import { scoreGrouping } from './grouping-score';
 import { SYSTEMATIC } from './grouping-systematic';
 
@@ -29,9 +29,15 @@ describe('word-form grouping accuracy', () => {
     expect(r.total).toBeGreaterThanOrEqual(120);
   });
 
-  it('generalises to held-out sentences (at least 96%)', () => {
+  it('generalises to held-out sentences', () => {
     const r = scoreGrouping(lemmatize, HELD_OUT);
-    expect(r.passed / r.total).toBeGreaterThanOrEqual(0.96);
+    expect(r.failures).toEqual([]);
+  });
+
+  it('never groups 60 pairs of look-alike words', () => {
+    const r = scoreGrouping(lemmatize, PRECISION);
+    expect(r.failures).toEqual([]);
+    expect(r.total).toBe(60);
   });
 });
 
@@ -63,7 +69,25 @@ describe('word-form grouping rules', () => {
     expect(group(w.words, 'battery')!.display).toBe('battery');
     expect(group(w.words, 'help')!.display).toBe('help');
     expect(group(w.words, 'gps')!.display).toBe('GPS');
+    const irregular = forms('It takes time. It took a week. They chose one. We choose daily.');
+    expect(group(irregular.words, 'take')!.display).toBe('take');
+    expect(group(irregular.words, 'choose')!.display).toBe('choose');
     expect(w.words.find((g) => g.forms.some((f) => f.form === 'data'))!.display).toBe('data');
+  });
+
+  it('joins an -ing word only to a word that is used as a verb', () => {
+    const noun = forms('Parenting is hard. Parents know. Good parenting helps.');
+    expect(group(noun.words, 'parenting')!.count).toBe(2);
+    expect(group(noun.words, 'parent')!.forms.map((f) => f.form)).toEqual(['parents']);
+    const verb = forms('Tracking is easy. We track every device. GPS tracking works.');
+    expect(group(verb.words, 'track')!.count).toBe(3);
+  });
+
+  it('counts a spelling on its own when the writer asks for it', () => {
+    const text = 'It records video. A record is kept. The recordings are saved. Recordings help.';
+    const a = analyze(text, { ...DEFAULT_OPTIONS, mode: 'forms', headingMode: 'off', separateWords: ['Recordings'] }, lemmatize(text)).whole;
+    expect(group(a.words, 'recordings')!.count).toBe(2);
+    expect(group(a.words, 'record')!.forms.map((f) => f.form).sort()).toEqual(['record', 'records']);
   });
 
   it('reports the part of speech the model saw', () => {
@@ -72,7 +96,7 @@ describe('word-form grouping rules', () => {
   });
 
   it('never changes the number of words counted', () => {
-    for (const c of [...BENCHMARK, ...HELD_OUT, ...SYSTEMATIC]) {
+    for (const c of [...BENCHMARK, ...HELD_OUT, ...SYSTEMATIC, ...PRECISION]) {
       const exact = analyze(c.text, { ...DEFAULT_OPTIONS, headingMode: 'off' });
       const grouped = forms(c.text);
       expect(grouped.words.reduce((n, g) => n + g.count, 0)).toBe(exact.whole.wordCount);

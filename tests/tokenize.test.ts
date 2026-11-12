@@ -22,8 +22,36 @@ describe('tokenize', () => {
     ]);
   });
 
-  it('splits hyphenated words into parts by default', () => {
-    expect(tokenize('real-time GPS‑enabled co-founder').map((t) => t.key)).toEqual(['real', 'time', 'gps', 'enabled', 'co', 'founder']);
+  it('splits hyphenated words into their parts so each part is counted', () => {
+    expect(tokenize('real-time GPS‑enabled water-resistant 24-hour 7-day well-known').map((t) => t.key)).toEqual([
+      'real', 'time', 'gps', 'enabled', 'water', 'resistant', '24', 'hour', '7', 'day', 'well', 'known',
+    ]);
+  });
+
+  it('keeps a hyphenated word whole when a part is not a word on its own', () => {
+    expect(tokenize('Wi-Fi e-mail t-shirt X-ray co-founder re-enter non-stop pre-order anti-theft sci-fi mid-range').map((t) => t.key)).toEqual([
+      'wi-fi', 'e-mail', 't-shirt', 'x-ray', 'co-founder', 're-enter', 'non-stop', 'pre-order', 'anti-theft', 'sci-fi', 'mid-range',
+    ]);
+  });
+
+  it('keeps the parts of a split compound in one phrase', () => {
+    expect(tokenize('a GPS-enabled tracker').map((t) => t.breakBefore)).toEqual([true, false, false, false]);
+  });
+
+  it('reads web and e-mail addresses as one item each', () => {
+    const t = tokenize('Visit https://www.example.com/a-b?x=1, www.site.org. Or example.com/path! Mail me@site.co.uk today.');
+    expect(t.filter((x) => x.link).map((x) => x.text)).toEqual(['https://www.example.com/a-b?x=1', 'www.site.org', 'example.com/path', 'me@site.co.uk']);
+    expect(t.filter((x) => !x.link).map((x) => x.key)).toEqual(['visit', 'or', 'mail', 'today']);
+  });
+
+  it('does not read a missing space after a full stop as a web address', () => {
+    expect(tokenize('That is the end.In fact it works.Come here.').some((x) => x.link)).toBe(false);
+    expect(keys('Amazon.com’s price')).toEqual(["amazon.com's", 'price']);
+  });
+
+  it('gives US, IT and WHO their own keys unless the whole line is in capitals', () => {
+    expect(tokenize('The US and us. IT helps it. WHO knows who.').map((t) => t.key)).toEqual(['the', 'US', 'and', 'us', 'IT', 'helps', 'it', 'WHO', 'knows', 'who']);
+    expect(tokenize('WHO IS IT FOR\nsmall text').map((t) => t.key)).toEqual(['who', 'is', 'it', 'for', 'small', 'text']);
   });
 
   it('reads every letter and digit in any script (randomised)', () => {
@@ -46,7 +74,7 @@ describe('tokenize', () => {
   });
 
   it('keeps dotted abbreviations whole', () => {
-    expect(keys('Made in the U.S. e.g. today')).toEqual(['made', 'in', 'the', 'u.s.', 'e.g.', 'today']);
+    expect(keys('Made in the U.S. e.g. today, a Ph.D. at 9 a.m.')).toEqual(['made', 'in', 'the', 'u.s.', 'e.g.', 'today', 'a', 'ph.d.', 'at', '9', 'a.m.']);
   });
 
   it('keeps accented and non-Latin words whole', () => {

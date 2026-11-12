@@ -7,9 +7,12 @@
 // suggestions ("buy -> bribe", "device -> twist"). So for each word and part
 // of speech this keeps only:
 //  - its dominant meanings: the most frequent one, plus any other used at
-//    least half as often in WordNet's sense-tagged corpus;
-//  - synonyms that are single words and are themselves attested in that same
-//    meaning, most frequent first.
+//    least half as often in WordNet's sense-tagged corpus, and only meanings
+//    attested at least MIN_EVIDENCE times;
+//  - synonyms that are single words and are themselves attested at least
+//    MIN_EVIDENCE times in that same meaning, most frequent first.
+// A word with no well-attested synonym gets no entry: no suggestion is better
+// than a wrong one.
 import { createRequire } from 'node:module';
 import { readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
@@ -22,6 +25,7 @@ const POS = { n: 'noun', v: 'verb', a: 'adj', r: 'adv' };
 const TYPE_NUM = { 1: 'n', 2: 'v', 3: 'a', 4: 'r', 5: 'a' };
 const WORD_RE = /^[a-z]{2,20}$/;
 const MAX_SYNONYMS = 6;
+const MIN_EVIDENCE = 5;
 const STOP = new Set(['be', 'have', 'do', 'get', 'go', 'take', 'make', 'ask', 'see', 'let', 'put', 'set', 'give', 'well', 'much', 'real', 'right', 'just']);
 
 // How often each word is used in each meaning in the tagged corpus.
@@ -54,12 +58,12 @@ for (const [p, name] of Object.entries(POS)) {
     const offsets = f.slice(6 + pointerCount);
     const count = (w, o) => senseCount.get(`${p}:${w}:${o}`) ?? 0;
     const top = count(lemma, offsets[0]);
-    const senses = offsets.filter((o, i) => i === 0 || (top > 0 && count(lemma, o) >= top / 2));
+    const senses = offsets.filter((o, i) => count(lemma, o) >= MIN_EVIDENCE && (i === 0 || count(lemma, o) >= top / 2));
     const scored = new Map();
     for (const o of senses) {
       for (const w of synsets.get(o) ?? []) {
         const n = count(w, o);
-        if (w === lemma || !WORD_RE.test(w) || STOP.has(w) || n < 1) continue;
+        if (w === lemma || !WORD_RE.test(w) || STOP.has(w) || n < MIN_EVIDENCE) continue;
         scored.set(w, Math.max(scored.get(w) ?? 0, n));
       }
     }

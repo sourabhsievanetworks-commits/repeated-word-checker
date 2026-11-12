@@ -18,6 +18,8 @@ export interface AnalyzeOptions {
   headingMode: HeadingMode;
   /** Extra words to leave out, e.g. brand names. */
   ignoreWords: string[];
+  /** Spellings that are never grouped with other forms (word-forms mode). */
+  separateWords: string[];
   /** A word used again within this many words counts as a close repeat. */
   closeWindow: number;
 }
@@ -31,6 +33,7 @@ export const DEFAULT_OPTIONS: AnalyzeOptions = {
   splitHyphens: true,
   headingMode: 'auto',
   ignoreWords: [],
+  separateWords: [],
   closeWindow: 12,
 };
 
@@ -51,6 +54,8 @@ export interface Group {
   common: boolean;
   /** A number like "2024" or "129.99": listed, but not flagged as repetition. */
   number: boolean;
+  /** A web or e-mail address: listed, but not flagged as repetition. */
+  link: boolean;
   /** Part of speech the model saw most often (word-forms mode only). */
   pos?: string;
   /** How many uses come within a few words of the previous use ("close repeats"). */
@@ -109,6 +114,9 @@ interface GroupBuilder {
   occurrences: Occurrence[];
   /** Word position of each occurrence within its scope. */
   positions: number[];
+  link: boolean;
+  /** Times the word is capitalised in the middle of a sentence: a sign of a name. */
+  properUses: number;
 }
 
 function addTo(
@@ -118,13 +126,16 @@ function addTo(
   spelling: string,
   occ: Occurrence,
   position: number,
+  link = false,
+  proper = false,
 ) {
   let g = map.get(key);
   if (!g) {
-    g = { key, count: 0, forms: new Map(), spellings: new Map(), occurrences: [], positions: [] };
+    g = { key, count: 0, forms: new Map(), spellings: new Map(), occurrences: [], positions: [], link, properUses: 0 };
     map.set(key, g);
   }
   g.positions.push(position);
+  if (proper) g.properUses++;
   g.count++;
   g.forms.set(form, (g.forms.get(form) ?? 0) + 1);
   g.spellings.set(spelling, (g.spellings.get(spelling) ?? 0) + 1);
@@ -145,22 +156,24 @@ function mostUsed(m: Map<string, number>, accept: (k: string) => boolean = () =>
 /**
  * Label for a group.
  *  - Its base word when that word is in the text ("battery" for battery/batteries).
- *  - Its base word when every spelling plainly comes from it ("help" for
- *    helped/helps), but never a dictionary form that looks different from
- *    what was written ("datum" for "data").
+ *  - Its base word when the spellings plainly come from it ("help" for
+ *    helped/helps, "take" for takes/took), but never a dictionary form that
+ *    looks different from everything that was written ("datum" for "data").
  *  - Otherwise its most used spelling.
- * A word that is only capitalised at the start of sentences is shown in lower case.
+ * A word that is capitalised only because it starts a sentence or sits in a
+ * heading is shown in lower case; names ("Jiobit") and acronyms ("GPS") keep
+ * their capitals.
  */
 function label(g: GroupBuilder): string {
   const phrase = g.key.includes(' ');
   const written = phrase ? null : mostUsed(g.spellings, (s) => normalizeKey(s) === g.key);
   const stem = g.key.slice(0, -1);
-  const derived = !phrase && g.key.length >= 3 && g.forms.size > 1 && [...g.forms.keys()].every((f) => f.startsWith(stem));
+  const derived = !phrase && g.key.length >= 3 && g.forms.size > 1 && [...g.forms.keys()].some((f) => f.startsWith(stem));
   const chosen = written ?? (derived ? g.key : mostUsed(g.spellings)!);
   const lower = chosen.toLowerCase();
-  // "Battery" -> "battery" when the lower-case spelling is also in the text; "GPS" stays.
   const titleCase = chosen !== lower && chosen.slice(1) === lower.slice(1);
-  return titleCase && g.spellings.has(lower) ? lower : chosen;
+  const pronounI = /^I(['\u2019]|$)/.test(chosen);
+  return titleCase && !pronounI && g.properUses === 0 ? lower : chosen;
 }
 
 function finish(map: Map<string, GroupBuilder>, minCount: number, closeWindow: number): Group[] {
@@ -182,11 +195,21 @@ function finish(map: Map<string, GroupBuilder>, minCount: number, closeWindow: n
       occurrences: g.occurrences,
       common: isStopword(g.key) || [...g.forms.keys()].some(isStopword),
       number: !/\p{L}/u.test(g.key),
+      link: g.link,
       close,
       closeAt,
     });
   }
   return groups.sort((a, b) => b.count - a.count || a.key.localeCompare(b.key));
+}
+
+const CAPITAL_RE = /^\p{Lu}/u;
+
+/** Is the word at this position the first word of a sentence, line, list item or cell? */
+function startsSentence(text: string, at: number): boolean {
+  let i = at - 1;
+  while (i >= 0 && /[ \t"'\u201C\u2018(\[]/.test(text[i])) i--;
+  return i < 0 || /[\n.!?:\u2026]/.test(text[i]);
 }
 
 /** Drops a phrase when a longer phrase containing it occurs just as often. */
@@ -217,15 +240,18 @@ export function analyze(
   let keyOf = new Map<Token, string>();
   let posOf = new Map<string, string>();
   if (options.mode === 'forms' && lemmaSpans) {
-    ({ keyOf, posOf } = groupWordForms(tokens, lemmaSpans));
+    ({ keyOf, posOf } = groupWordForms(tokens, lemmaSpans, new Set(options.separateWords.map(normalizeKey))));
   } else {
     for (const t of tokens) keyOf.set(t, stripPossessive(t.key));
   }
 
+  // Links are never a form of another word.
+  for (const t of tokens) if (t.link) keyOf.set(t, stripPossessive(t.key));
+
   const isContent = (t: Token) => {
     if (!t.hasLetter && !options.includeNumbers) return false;
     const k = keyOf.get(t)!;
-    if (ignore.has(t.key) || ignore.has(k)) return false;
+    if (ignore.has(t.key.toLowerCase()) || ignore.has(k.toLowerCase())) return false;
     if (options.ignoreStopwords && (isStopword(t.key) || isStopword(k))) return false;
     return true;
   };
@@ -247,7 +273,10 @@ export function analyze(
       if (i > 0 && heading !== lastHeading) position += options.closeWindow;
       lastHeading = heading;
       position++;
-      if (isContent(t)) addTo(words, keyOf.get(t)!, t.key, t.text, { start: t.start, end: t.end }, position);
+      if (isContent(t)) {
+        const proper = !heading && CAPITAL_RE.test(t.text) && !startsSentence(text, t.start);
+        addTo(words, keyOf.get(t)!, t.key, t.text, { start: t.start, end: t.end }, position, t.link, proper);
+      }
     });
 
     const phrases = new Map<string, GroupBuilder>();
@@ -256,7 +285,7 @@ export function analyze(
         const win = scopeTokens.slice(i, i + n);
         if (win.slice(1).some((t) => t.breakBefore)) continue;
         // Phrases that start or end with "the", "and"… are noise, not repetition.
-        const edge = (t: Token) => t.hasLetter && isContent(t) && !isStopword(t.key) && !isStopword(keyOf.get(t)!);
+        const edge = (t: Token) => t.hasLetter && !t.link && isContent(t) && !isStopword(t.key) && !isStopword(keyOf.get(t)!);
         if (!edge(win[0]) || !edge(win[n - 1])) continue;
         addTo(
           phrases,

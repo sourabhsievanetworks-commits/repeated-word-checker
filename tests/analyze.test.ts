@@ -92,6 +92,27 @@ describe('analyze', () => {
     expect(a.whole.words[0]).toMatchObject({ key: 'gps', display: 'GPS', count: 3 });
   });
 
+  it('counts a web or e-mail address as one item, not as its parts', () => {
+    const a = analyze('It works. See https://www.example.com/how-it-works for how it works, or mail help@example.com.', opts({ headingMode: 'off' }));
+    expect(counts(a.whole.words)).toMatchObject({ it: 2, works: 2, how: 1, 'https://www.example.com/how-it-works': 1, 'help@example.com': 1 });
+    expect(counts(a.whole.words).www).toBeUndefined();
+    expect(counts(a.whole.words).com).toBeUndefined();
+    expect(a.whole.words.filter((g) => g.link).map((g) => g.key).sort()).toEqual(['help@example.com', 'https://www.example.com/how-it-works']);
+    expect(a.check.hiddenBySettings).toBe(0);
+  });
+
+  it('keeps US, IT and WHO apart from us, it and who', () => {
+    const a = analyze('Sold in the US. It helps us. The US team asked IT, and it worked. WHO guidance says who qualifies.', opts({ headingMode: 'off' }));
+    expect(counts(a.whole.words)).toMatchObject({ US: 2, us: 1, IT: 1, it: 2, WHO: 1, who: 1 });
+    expect(a.whole.words.find((g) => g.key === 'US')).toMatchObject({ common: false, display: 'US' });
+    expect(a.whole.words.find((g) => g.key === 'us')!.common).toBe(true);
+  });
+
+  it('lets the skip list match US as well as us', () => {
+    const a = analyze('The US market. Tell us.', opts({ headingMode: 'off', ignoreWords: parseWordList('US') }));
+    expect(counts(a.whole.words)).toEqual({ the: 1, market: 1, tell: 1 });
+  });
+
   it('finds repeated phrases without crossing punctuation or line breaks', () => {
     const a = analyze('best gps tracker. best gps tracker! gps tracker\nbest gps, tracker', opts({ headingMode: 'off' }));
     expect(a.check.hiddenBySettings).toBe(0);
@@ -145,7 +166,7 @@ function rng(seed: number) {
 describe('randomised cross-check against an independent counter', () => {
   const vocab = [
     'tracker', 'GPS', 'battery', 'Hiking', 'trail', 'map', 'signal', 'device', 'safety', 'Alert', 'route', 'x',
-    'the', 'and', 'is', 'of', 'a', 'I', 'very', 'also', '2024', '10', 'GPS-enabled', 'real-time', 'e-mail',
+    'the', 'and', 'is', 'of', 'a', 'I', 'very', 'also', '2024', '10', 'GPS-enabled', 'real-time', 'long-term',
   ];
   const seps = [' ', '  ', ', ', '. ', '! ', '? ', '\n', '\n\n', ' - ', ' — ', ' (', ') ', '; ', ': ', '"', '\t', '\n## ', '\n# ', ' / ', ' & ', ' $', '% '];
 
